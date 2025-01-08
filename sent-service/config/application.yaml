@@ -1,0 +1,11 @@
+server:
+  http:
+    port: 8081
+    enableTLS: false
+    correctTimeOut: 10000
+
+grpcClient:
+  host: localhost
+  port: 50051
+  readTimeOut: 120s
+  writeTimeOut: 120s

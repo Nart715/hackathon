@@ -1,0 +1,43 @@
+# version: "3.1"
+
+services:
+  nats:
+    image: nats:2.10.24-alpine3.21
+    container_name: nats
+    ports:
+      - "4222:4222"
+      - "8222:8222"
+      - "6222:6222"
+    networks:
+      - local-db-dev-01
+  redis:
+    image: "bitnami/redis:latest"
+    platform: linux/amd64
+    environment:
+      - REDIS_REPLICATION_MODE=master
+      - ALLOW_EMPTY_PASSWORD=yes
+      - cluster-enabled=yes
+    networks:
+      - local-db-dev-01
+    volumes:
+      - ./redis-conf:/opt/bitnami/redis/etc
+    ports:
+      - "6379:6379"
+  mysqldb:
+    image: "mysql:latest"
+    container_name: mysqldb
+    # restart: always
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_DATABASE: ecomerce
+      MYSQL_ROOT_PASSWORD: root123
+    volumes:
+      - ./mysql/data:/var/lib/mysql
+      - ./mysql-conf:/app/conf
+    user: root
+    networks:
+      - local-db-dev-01
+networks:
+  local-db-dev-01:
+    driver: bridge
