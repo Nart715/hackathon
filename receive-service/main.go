@@ -2,19 +2,17 @@ package main
 
 import (
 	mconfig "component-master/config"
-	"component-master/infra/database"
 	grpcServer "component-master/infra/grpc/server"
 	infraRedis "component-master/infra/redis"
+	"component-master/repository"
 	"component-master/util"
 	"flag"
 	"fmt"
 	"log/slog"
 	"receive-service/biz"
-	"receive-service/repository"
 	"receive-service/service"
 
 	protoaccount "component-master/proto/account"
-	protobetting "component-master/proto/betting"
 )
 
 var (
@@ -47,30 +45,21 @@ func main() {
 
 func StartBettingGrpcServer(conf *mconfig.Config) {
 	slog.Info("StartBettingGrpcServer start")
-	bettingService, accountService := initServices(conf)
-	bettingGrpcServer := grpcServer.InitBettingGrpcServer(conf.Server.Grpc, bettingService, accountService)
+	accountService := initServices(conf)
+	bettingGrpcServer := grpcServer.InitAccountGrpcServer(conf.Server.Grpc, accountService)
 	bettingGrpcServer.Start()
 }
 
-func initServices(conf *mconfig.Config) (protobetting.BettingServiceServer, protoaccount.AccountServiceServer) {
-	db, err := database.NewDataSource(&conf.Database)
-	if err != nil {
-		slog.Error(fmt.Sprintf("failed to init database, %v", err))
-		return nil, nil
-	}
+func initServices(conf *mconfig.Config) protoaccount.AccountServiceServer {
 	redis, err := infraRedis.NewInitRedisClient(&conf.Redis)
 	if err != nil {
 		slog.Error(fmt.Sprintf("failed to init redis, %v", err))
-		return nil, nil
+		return nil
 	}
 
-	bettingRepository := repository.NewBettingRepository(db)
+	slog.Info(fmt.Sprintf("redis: %v", redis != nil))
 	redisRepository := repository.NewRedisRepository(redis)
-	bettingBiz := biz.NewBettingBiz(bettingRepository, redisRepository)
-	bettingService := service.NewBettingService(bettingBiz)
-
-	accountRepository := repository.NewAccountRepository(db)
-	accountBiz := biz.NewAccountBiz(accountRepository)
+	accountBiz := biz.NewAccountBiz(redisRepository)
 	accountService := service.NewAccountService(accountBiz)
-	return bettingService, accountService
+	return accountService
 }

@@ -1,35 +1,25 @@
 server:
-  http:
-    host: localhost
-    port: 8081
-    enableTLS: false
-    correctTimeOut: 10000
   grpc:
     host: localhost
-    port: 50051
+    port: 8080
     enableTLS: false
     correctTimeOut: 30000
 
-database:
-  driverName: mysql
-  host: localhost
-  port: 3306
-  userName: root
-  password: root123
-  dbName: ecomerce
-  sslMode: disable
-  maxOpenConnections: 100
-  maxIdleConnections: 10
-  maxConnLifetime: 3600s
-  maxConnIdleTime: 3600s
-
 redis:
-  host: localhost
-  port: 6379
-  password: ""
   db: 0
-  maxIdle: 10
+  maxIdle: 1024
   dialTimeout: 10s
   readTimeout: 10s
   writeTimeout: 10s
+  readOnly: true
+  routeRandomly: true
+  maxRedirects: 3
+  clusters:
+    - "localhost:7001"
+    - "localhost:7002"
+    - "localhost:7003"
+    - "localhost:7004"
+    - "localhost:7005"
+    - "localhost:7006"
+
 

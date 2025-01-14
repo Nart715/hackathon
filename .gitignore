@@ -22,7 +22,6 @@ go.work
 go.work.sum
 
 # env file
-.env
 
 redis-conf/
 redis-conf/*
@@ -31,3 +30,7 @@ mysql/
 mysql/*
 vendor/
 vendor/*
+
+redis-7.2.2/
+redis-7.2.2/*
+.env

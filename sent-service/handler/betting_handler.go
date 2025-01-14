@@ -2,36 +2,52 @@ package handler
 
 import (
 	"sent-service/service"
-	"time"
 
 	"component-master/util"
 
-	proto "component-master/proto/message"
+	proto "component-master/proto/account"
 
 	"github.com/gofiber/fiber/v2"
 )
 
-type BettingHandler interface {
-	CreateBetting(c *fiber.Ctx) error
+type AccountHandler interface {
+	CreateAccount(c *fiber.Ctx) error
+	BalanceChange(c *fiber.Ctx) error
 }
 
-type bettingHandler struct {
-	bettingService service.BettingService
+type accountHandler struct {
+	accountService service.AccountService
 }
 
-func NewBettingHandler(bettingService service.BettingService) BettingHandler {
-	return &bettingHandler{bettingService: bettingService}
+func NewAccountHandler(accountService service.AccountService) AccountHandler {
+	return &accountHandler{accountService: accountService}
 }
 
-func (b *bettingHandler) CreateBetting(c *fiber.Ctx) error {
+func (b *accountHandler) CreateAccount(c *fiber.Ctx) error {
 	ctx := util.ContextwithTimeout()
-	// TODO: scan request from api to here
-	b.bettingService.CreateBetting(ctx, &proto.BettingMessageRequest{
-		AccountId:     "1",
-		Amount:        100,
-		BetId:         100,
-		TransactionId: 100,
-		Timestamp:     time.Now().UnixMilli(),
-	})
-	return c.Status(fiber.StatusOK).SendString("Betting successfully created")
+	req := &proto.CreateAccountRequest{}
+	if err := c.BodyParser(req); err != nil {
+		return c.Status(fiber.StatusBadRequest).SendString(err.Error())
+	}
+	res, err := b.accountService.CreateAccount(ctx, req)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).SendString(err.Error())
+	}
+	if res.GetCode() != 0 {
+		return c.Status(fiber.StatusInternalServerError).SendString(res.GetMessage())
+	}
+	return c.Status(fiber.StatusOK).SendString("Account successfully created")
+}
+
+func (b *accountHandler) BalanceChange(c *fiber.Ctx) error {
+	ctx := util.ContextwithTimeout()
+	req := &proto.BalanceChangeRequest{}
+	res, err := b.accountService.BalanceChange(ctx, req)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).SendString(err.Error())
+	}
+	if res.GetCode() != 0 {
+		return c.Status(fiber.StatusInternalServerError).SendString(res.GetMessage())
+	}
+	return c.Status(fiber.StatusOK).SendString("Balance successfully changed")
 }

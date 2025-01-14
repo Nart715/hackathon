@@ -18,16 +18,20 @@ func InitHttpServer(conf *config.Config) {
 
 	httpClient.InitHttpServer()
 
-	v1 := httpClient.App().Group("/api/v1")
-	SetupBettingRoute(v1, conf)
+	v1 := httpClient.App().Group("/api/v1/player")
+	SetupRoute(v1, conf)
 	httpClient.Start()
 }
 
-func SetupBettingRoute(r fiber.Router, conf *config.Config) {
-	bettingClient := grpcClient.NewBettingClient(conf.GrpcClient)
-	bettingService := service.NewBettingService(bettingClient)
-	bettingHandler := handler.NewBettingHandler(bettingService)
+func SetupRoute(r fiber.Router, conf *config.Config) {
+	accountClient := grpcClient.NewAccountClient(conf.GrpcClient)
+	accountService := service.NewAccountService(accountClient)
+	accountHandler := handler.NewAccountHandler(accountService)
 
-	groupBetting := r.Group("/betting")
-	POST(groupBetting, "", bettingHandler.CreateBetting)
+	groupCreatedAccount := r.Group("/created-account")
+	POST(groupCreatedAccount, "", accountHandler.CreateAccount)
+
+	// both of deposit and betting differs by the action
+	groupBalanceChange := r.Group("/balance-change")
+	POST(groupBalanceChange, "", accountHandler.BalanceChange)
 }

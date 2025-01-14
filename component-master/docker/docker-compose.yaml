@@ -1,43 +1,120 @@
 # version: "3.1"
 
+version: '3.8'
+
 services:
-  nats:
-    image: nats:2.10.24-alpine3.21
-    container_name: nats
+  redis-node-1:
+    image: redis:7.4
+    command: redis-server --port 6379 --cluster-enabled yes --cluster-config-file nodes.conf --cluster-node-timeout 5000 --appendonly yes --cluster-announce-ip redis-node-1 --cluster-announce-port 6379 --cluster-announce-bus-port 16379
     ports:
-      - "4222:4222"
-      - "8222:8222"
-      - "6222:6222"
+      - "7001:6379"
+      - "17001:16379"
+    volumes:
+      - redis-node-1-data:/data
     networks:
-      - local-db-dev-01
-  redis:
-    image: "bitnami/redis:latest"
-    platform: linux/amd64
+      - redis-cluster
     environment:
-      - REDIS_REPLICATION_MODE=master
       - ALLOW_EMPTY_PASSWORD=yes
-      - cluster-enabled=yes
-    networks:
-      - local-db-dev-01
+
+  redis-node-2:
+    image: redis:7.4
+    command: redis-server --port 6379 --cluster-enabled yes --cluster-config-file nodes.conf --cluster-node-timeout 5000 --appendonly yes --cluster-announce-ip redis-node-2 --cluster-announce-port 6379 --cluster-announce-bus-port 16379
+    ports:
+      - "7002:6379"
+      - "17002:16379"
     volumes:
-      - ./redis-conf:/opt/bitnami/redis/etc
-    ports:
-      - "6379:6379"
-  mysqldb:
-    image: "mysql:latest"
-    container_name: mysqldb
-    # restart: always
-    ports:
-      - "3306:3306"
+      - redis-node-2-data:/data
+    networks:
+      - redis-cluster
     environment:
-      MYSQL_DATABASE: ecomerce
-      MYSQL_ROOT_PASSWORD: root123
+      - ALLOW_EMPTY_PASSWORD=yes
+
+  redis-node-3:
+    image: redis:7.4
+    command: redis-server --port 6379 --cluster-enabled yes --cluster-config-file nodes.conf --cluster-node-timeout 5000 --appendonly yes --cluster-announce-ip redis-node-3 --cluster-announce-port 6379 --cluster-announce-bus-port 16379
+    ports:
+      - "7003:6379"
+      - "17003:16379"
     volumes:
-      - ./mysql/data:/var/lib/mysql
-      - ./mysql-conf:/app/conf
-    user: root
+      - redis-node-3-data:/data
     networks:
-      - local-db-dev-01
+      - redis-cluster
+    environment:
+      - ALLOW_EMPTY_PASSWORD=yes
+
+  redis-node-4:
+    image: redis:7.4
+    command: redis-server --port 6379 --cluster-enabled yes --cluster-config-file nodes.conf --cluster-node-timeout 5000 --appendonly yes --cluster-announce-ip redis-node-4 --cluster-announce-port 6379 --cluster-announce-bus-port 16379
+    ports:
+      - "7004:6379"
+      - "17004:16379"
+    volumes:
+      - redis-node-4-data:/data
+    networks:
+      - redis-cluster
+    environment:
+      - ALLOW_EMPTY_PASSWORD=yes
+
+  redis-node-5:
+    image: redis:7.4
+    command: redis-server --port 6379 --cluster-enabled yes --cluster-config-file nodes.conf --cluster-node-timeout 5000 --appendonly yes --cluster-announce-ip redis-node-5 --cluster-announce-port 6379 --cluster-announce-bus-port 16379
+    ports:
+      - "7005:6379"
+      - "17005:16379"
+    volumes:
+      - redis-node-5-data:/data
+    networks:
+      - redis-cluster
+    environment:
+      - ALLOW_EMPTY_PASSWORD=yes
+
+  redis-node-6:
+    image: redis:7.4
+    command: redis-server --port 6379 --cluster-enabled yes --cluster-config-file nodes.conf --cluster-node-timeout 5000 --appendonly yes --cluster-announce-ip redis-node-6 --cluster-announce-port 6379 --cluster-announce-bus-port 16379
+    ports:
+      - "7006:6379"
+      - "17006:16379"
+    volumes:
+      - redis-node-6-data:/data
+    networks:
+      - redis-cluster
+    environment:
+      - ALLOW_EMPTY_PASSWORD=yes
+
+  redis-cluster-init:
+    image: redis:7.4
+    environment:
+      - ALLOW_EMPTY_PASSWORD=yes
+    depends_on:
+      - redis-node-1
+      - redis-node-2
+      - redis-node-3
+      - redis-node-4
+      - redis-node-5
+      - redis-node-6
+    networks:
+      - redis-cluster
+    command: >
+      bash -c "
+      echo 'Waiting for redis nodes...' &&
+      sleep 10 &&
+      redis-cli --cluster create
+      redis-node-1:6379
+      redis-node-2:6379
+      redis-node-3:6379
+      redis-node-4:6379
+      redis-node-5:6379
+      redis-node-6:6379
+      --cluster-replicas 1 --cluster-yes"
+
 networks:
-  local-db-dev-01:
+  redis-cluster:
     driver: bridge
+
+volumes:
+  redis-node-1-data:
+  redis-node-2-data:
+  redis-node-3-data:
+  redis-node-4-data:
+  redis-node-5-data:
+  redis-node-6-data:

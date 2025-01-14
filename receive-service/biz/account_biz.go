@@ -2,36 +2,27 @@ package biz
 
 import (
 	proto "component-master/proto/account"
+	"component-master/repository"
 	"context"
-	"log/slog"
-	"receive-service/repository"
 )
 
 type AccountBiz interface {
 	CreateAccount(ctx context.Context, req *proto.CreateAccountRequest) (*proto.CreateAccountResponse, error)
-	DepositAccount(ctx context.Context, req *proto.DepositAccountRequest) (*proto.DepositAccountResponse, error)
+	BalanceChange(ctx context.Context, accountId int64, amount int64) (*proto.BalanceChangeResponse, error)
 }
 
 type accountBiz struct {
-	accountRepository repository.AccountRepository
+	rd repository.RedisRepository
 }
 
-func NewAccountBiz(accountRepository repository.AccountRepository) AccountBiz {
-	return &accountBiz{accountRepository: accountRepository}
+func NewAccountBiz(redisRepo repository.RedisRepository) AccountBiz {
+	return &accountBiz{rd: redisRepo}
 }
 
 func (a *accountBiz) CreateAccount(ctx context.Context, req *proto.CreateAccountRequest) (*proto.CreateAccountResponse, error) {
-	slog.InfoContext(ctx, "CreateAccount", "req", req)
-	return &proto.CreateAccountResponse{
-		Code:    0,
-		Message: "success",
-	}, nil
+	return a.rd.CreateAccount(ctx, req)
 }
 
-func (a *accountBiz) DepositAccount(ctx context.Context, req *proto.DepositAccountRequest) (*proto.DepositAccountResponse, error) {
-	slog.InfoContext(ctx, "DepositAccount", "req", req)
-	return &proto.DepositAccountResponse{
-		Code:    0,
-		Message: "success",
-	}, nil
+func (a *accountBiz) BalanceChange(ctx context.Context, accountId int64, amount int64) (*proto.BalanceChangeResponse, error) {
+	return a.rd.BalanceChange(ctx, accountId, amount)
 }
