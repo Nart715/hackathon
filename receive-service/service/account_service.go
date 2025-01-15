@@ -6,13 +6,6 @@ import (
 	"receive-service/biz"
 )
 
-var (
-	MAP_BALANCE_CHANGE = map[proto.Action]int64{
-		proto.Action_DEPOSIT: 1,
-		proto.Action_CREDIT:  -1,
-	}
-)
-
 type accountService struct {
 	proto.UnimplementedAccountServiceServer
 	accountBiz biz.AccountBiz
@@ -37,8 +30,7 @@ func (s accountService) CreateAccount(ctx context.Context, req *proto.CreateAcco
 }
 
 func (s accountService) BalanceChange(ctx context.Context, req *proto.BalanceChangeRequest) (*proto.BalanceChangeResponse, error) {
-	amount := MAP_BALANCE_CHANGE[proto.Action(req.GetAction())] * req.GetAmount()
-	_, err := s.accountBiz.BalanceChange(ctx, req.GetAccountId(), amount)
+	_, err := s.accountBiz.BalanceChange(ctx, req)
 	if err != nil {
 		return &proto.BalanceChangeResponse{
 			Code:    -1,

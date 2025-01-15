@@ -5,6 +5,8 @@ import (
 	proto "component-master/proto/account"
 	"context"
 	"errors"
+	"fmt"
+	"log/slog"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -14,17 +16,21 @@ import (
 )
 
 var (
-	pipelineSize    = int64(1000)
+	pipelineSize    = int64(1)
 	pipelineTimeout = 100 * time.Millisecond
 
 	count       int
 	redisCtx    = context.Background()
 	safeCounter *SafeCounter
 
-	AccountIdField = "account_id"
-	BalanceField   = "balance"
-	CreatedAtField = "created_at"
-	UpdatedAtField = "updated_at"
+	AccountIdField = "1"
+	BalanceField   = "2"
+	CreatedAtField = "3"
+	UpdatedAtField = "4"
+
+	TransactionSetKeyPrefix = "account:%d:transactions"
+
+	TransactionExpiryDuration = 24 * time.Hour
 )
 
 type SafeCounter struct {
@@ -56,7 +62,7 @@ func tryLock(m *SafeCounter, timeout time.Duration) bool {
 type RedisRepository interface {
 	GetRedis() *redisv9.ClusterClient
 	CreateAccount(ctx context.Context, req *proto.CreateAccountRequest) (*proto.CreateAccountResponse, error)
-	BalanceChange(ctx context.Context, accountId int64, amount int64) (*proto.BalanceChangeResponse, error)
+	BalanceChange(ctx context.Context, accountId, amount, transactionId int64) (*proto.BalanceChangeResponse, error)
 }
 
 type redisRepository struct {
@@ -83,6 +89,7 @@ func (r *redisRepository) GetRedis() *redisv9.ClusterClient {
 }
 
 func (r *redisRepository) CreateAccount(ctx context.Context, req *proto.CreateAccountRequest) (*proto.CreateAccountResponse, error) {
+	slog.Info("Create account")
 	account := map[string]interface{}{
 		AccountIdField: req.AccountId,
 		BalanceField:   int64(0),
@@ -92,13 +99,15 @@ func (r *redisRepository) CreateAccount(ctx context.Context, req *proto.CreateAc
 
 	// Add operation to pipeline with mutex protection
 	r.pipelineMu.Lock()
-	err := r.pipeline.HSet(ctx, mapKeyInt64toString(req.AccountId), account).Err()
+	accountKey := mapKeyInt64toString(req.AccountId)
+	err := r.pipeline.HSet(ctx, accountKey, account).Err()
 	r.pipelineMu.Unlock()
 	if err != nil {
 		return nil, err
 	}
 
 	// Increment operation counter
+
 	count := r.opCounter.Add(1)
 
 	// Execute pipeline if threshold reached
@@ -117,24 +126,110 @@ func (r *redisRepository) CreateAccount(ctx context.Context, req *proto.CreateAc
 	return &proto.CreateAccountResponse{Code: 0, Message: "Successs", Data: &accountData}, nil
 }
 
-func (r *redisRepository) BalanceChange(ctx context.Context, accountId int64, amount int64) (*proto.BalanceChangeResponse, error) {
+func (r *redisRepository) ValidateAndRecordTransaction(ctx context.Context, accountId, transactionId int64) (bool, error) {
+	transactionKey := fmt.Sprintf(TransactionSetKeyPrefix, accountId)
+
+	r.pipelineMu.Lock()
+	defer r.pipelineMu.Unlock()
+
 	tx := r.pipeline.TxPipeline()
-	accountKey := mapKeyInt64toString(accountId)
-	balance, err := tx.HGet(ctx, accountKey, BalanceField).Result()
+
+	// use lua script for atomic check and add
+	script := `
+        -- Check if transaction exists
+        if redis.call('SISMEMBER', KEYS[1], ARGV[1]) == 1 then
+            return 0  -- Transaction already exists
+        end
+
+        -- Add transaction and set expiry
+        redis.call('SADD', KEYS[1], ARGV[1])
+        redis.call('EXPIRE', KEYS[1], ARGV[2])
+        return 1  -- New transaction recorded
+    `
+
+	// execute script with transaction id and expiry time
+	result := tx.Eval(ctx, script,
+		[]string{transactionKey},
+		transactionId,
+		int(TransactionExpiryDuration.Seconds()))
+
+	_, err := tx.Exec(ctx)
 	if err != nil {
-		return nil, err
+		return false, fmt.Errorf("failed to execute transaction: %w", err)
 	}
-	num, _ := strconv.Atoi(balance)
-	if (num + int(amount)) < 0 {
-		return nil, errors.New("balance is not enough")
+
+	success, err := result.Int64()
+	if err != nil {
+		return false, fmt.Errorf("failed to get result: %w", err)
 	}
-	num = num + int(amount)
-	tx.HSet(ctx, accountKey, BalanceField, num)
-	tx.HSet(ctx, accountKey, UpdatedAtField, time.Now().UnixMicro())
+
+	return success == 1, nil
+}
+
+func (r *redisRepository) BalanceChange(ctx context.Context, accountId, amount, transactionId int64) (*proto.BalanceChangeResponse, error) {
+	isValid, err := r.ValidateAndRecordTransaction(ctx, accountId, transactionId)
+	if err != nil {
+		return nil, fmt.Errorf("failed to validate transaction: %w", err)
+	}
+
+	if !isValid {
+		slog.Error("duplicate transaction detected",
+			"accountId", accountId,
+			"transactionId", transactionId)
+		return nil, errors.New("duplicate transaction")
+	}
+
+	accountKey := mapKeyInt64toString(accountId)
+
+	r.pipelineMu.Lock()
+	defer r.pipelineMu.Unlock()
+
+	tx := r.pipeline.TxPipeline()
+
+	// Lua script to check and increase balance atomically
+	script := `
+        local balance = redis.call('HGET', KEYS[1], ARGV[1])
+        local amount = tonumber(ARGV[2])
+        balance = tonumber(balance)
+
+        -- Check if balance would go negative
+        if (balance + amount) < 0 then
+            return 0  -- Return 0 if balance would be negative
+        end
+
+        -- If not negative, increase balance and update timestamp
+        redis.call('HINCRBY', KEYS[1], ARGV[1], amount)
+        redis.call('HSET', KEYS[1], ARGV[3], ARGV[4])
+        return 1  -- Return 1 for successful increase
+    `
+
+	// Execute the script with parameters
+	result := tx.Eval(ctx, script, []string{accountKey},
+		BalanceField,
+		amount,
+		UpdatedAtField,
+		time.Now().UnixMicro())
+
 	_, err = tx.Exec(ctx)
 	if err != nil {
-		return nil, errors.New("failed to update balance")
+		return nil, fmt.Errorf("failed to execute transaction: %w", err)
 	}
+
+	// Check if operation was successful
+	success, err := result.Int64()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get result: %w", err)
+	}
+
+	if success == 0 {
+		slog.Error("balance is not enough")
+		return nil, errors.New("balance is not enough")
+	}
+
+	slog.Info("Balance updated successfully",
+		"accountId", accountId,
+		"amount", amount)
+
 	return &proto.BalanceChangeResponse{Code: 0, Message: "Success"}, nil
 }
 

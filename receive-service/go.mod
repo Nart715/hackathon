@@ -4,7 +4,10 @@ go 1.23.0
 
 replace component-master => ../component-master
 
-require component-master v0.0.0-00010101000000-000000000000
+require (
+	component-master v0.0.0-00010101000000-000000000000
+	golang.org/x/sync v0.10.0
+)
 
 require (
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect

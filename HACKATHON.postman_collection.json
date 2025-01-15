@@ -1,0 +1,70 @@
+{
+	"info": {
+		"_postman_id": "ed689741-6360-4299-89ad-efc296863dc9",
+		"name": "HACKATHON",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "39839857"
+	},
+	"item": [
+		{
+			"name": "CREATED ACCOUNT",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"accountId\": 1\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "localhost:8081/api/v1/player/created-account",
+					"host": [
+						"localhost"
+					],
+					"port": "8081",
+					"path": [
+						"api",
+						"v1",
+						"player",
+						"created-account"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "BALANCE CHANGE",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"accountId\": 1,\n    \"transactionId\": 1,\n    \"amount\": 100,\n    \"action\": 0 // 1 credit, 0 deposit\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "localhost:8081/api/v1/player/balance-change",
+					"host": [
+						"localhost"
+					],
+					"port": "8081",
+					"path": [
+						"api",
+						"v1",
+						"player",
+						"balance-change"
+					]
+				}
+			},
+			"response": []
+		}
+	]
+}
