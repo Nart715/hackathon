@@ -42,6 +42,9 @@ func (b *accountHandler) CreateAccount(c *fiber.Ctx) error {
 func (b *accountHandler) BalanceChange(c *fiber.Ctx) error {
 	ctx := util.ContextwithTimeout()
 	req := &proto.BalanceChangeRequest{}
+	if err := c.BodyParser(req); err != nil {
+		return c.Status(fiber.StatusBadRequest).SendString(err.Error())
+	}
 	res, err := b.accountService.BalanceChange(ctx, req)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).SendString(err.Error())

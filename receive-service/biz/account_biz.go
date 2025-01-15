@@ -20,9 +20,11 @@ func NewAccountBiz(redisRepo repository.RedisRepository) AccountBiz {
 }
 
 func (a *accountBiz) CreateAccount(ctx context.Context, req *proto.CreateAccountRequest) (*proto.CreateAccountResponse, error) {
-	return a.rd.CreateAccount(ctx, req)
+	go a.rd.CreateAccount(ctx, req)
+	return &proto.CreateAccountResponse{Code: 0, Message: "success"}, nil
 }
 
 func (a *accountBiz) BalanceChange(ctx context.Context, accountId int64, amount int64) (*proto.BalanceChangeResponse, error) {
-	return a.rd.BalanceChange(ctx, accountId, amount)
+	go a.rd.BalanceChange(ctx, accountId, amount)
+	return &proto.BalanceChangeResponse{Code: 0, Message: "success"}, nil
 }

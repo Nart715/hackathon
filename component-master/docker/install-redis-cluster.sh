@@ -160,15 +160,15 @@ sync_redis_cluster(){
 	done
 	clause="${clause} --cluster-replicas 1"
 	echo $clause
-#	./$clause
+  ./$clause
 }
 
 export_redis_cli(){
 	alias redis_cli='cd /code/7001/redis-5.0.5/src/ && ./redis-cli -h 127.0.0.1 -p 7001 -c'
 }
 
-#create_dir
-#install_redis_packages
-#copy_config_redis_cluster
+create_dir
+install_redis_packages
+copy_config_redis_cluster
 start_redis_host
 sync_redis_cluster

@@ -85,7 +85,7 @@ func (r *redisRepository) GetRedis() *redisv9.ClusterClient {
 func (r *redisRepository) CreateAccount(ctx context.Context, req *proto.CreateAccountRequest) (*proto.CreateAccountResponse, error) {
 	account := map[string]interface{}{
 		AccountIdField: req.AccountId,
-		BalanceField:   0,
+		BalanceField:   int64(0),
 		CreatedAtField: time.Now().UnixMicro(),
 		UpdatedAtField: time.Now().UnixMicro(),
 	}
