@@ -31,6 +31,8 @@ var (
 	TransactionSetKeyPrefix = "account:%d:transactions"
 
 	TransactionExpiryDuration = 24 * time.Hour
+
+	TransactionSeqKey = "transaction:sequence"
 )
 
 type SafeCounter struct {
@@ -63,6 +65,7 @@ type RedisRepository interface {
 	GetRedis() *redisv9.ClusterClient
 	CreateAccount(ctx context.Context, req *proto.CreateAccountRequest) (*proto.CreateAccountResponse, error)
 	BalanceChange(ctx context.Context, accountId, amount, transactionId int64) (*proto.BalanceChangeResponse, error)
+	GenerateTransactionSeq(ctx context.Context) (int64, error)
 }
 
 type redisRepository struct {
@@ -126,7 +129,7 @@ func (r *redisRepository) CreateAccount(ctx context.Context, req *proto.CreateAc
 	return &proto.CreateAccountResponse{Code: 0, Message: "Successs", Data: &accountData}, nil
 }
 
-func (r *redisRepository) ValidateAndRecordTransaction(ctx context.Context, accountId, transactionId int64) (bool, error) {
+func (r *redisRepository) validateAndRecordTransaction(ctx context.Context, accountId, transactionId int64) (bool, error) {
 	transactionKey := fmt.Sprintf(TransactionSetKeyPrefix, accountId)
 
 	r.pipelineMu.Lock()
@@ -167,7 +170,7 @@ func (r *redisRepository) ValidateAndRecordTransaction(ctx context.Context, acco
 }
 
 func (r *redisRepository) BalanceChange(ctx context.Context, accountId, amount, transactionId int64) (*proto.BalanceChangeResponse, error) {
-	isValid, err := r.ValidateAndRecordTransaction(ctx, accountId, transactionId)
+	isValid, err := r.validateAndRecordTransaction(ctx, accountId, transactionId)
 	if err != nil {
 		return nil, fmt.Errorf("failed to validate transaction: %w", err)
 	}
@@ -269,4 +272,39 @@ func (r *redisRepository) pipelineFlusher() {
 			}
 		}
 	}
+}
+
+func (r *redisRepository) GenerateTransactionSeq(ctx context.Context) (int64, error) {
+	r.pipelineMu.Lock()
+	defer r.pipelineMu.Unlock()
+
+	tx := r.pipeline.TxPipeline()
+
+	script := `
+        -- Get current timestamp in microseconds
+        local ts = redis.call('TIME')
+        local timestamp = ts[1] * 1000000 + ts[2]
+
+        -- Get sequence number and increment
+        local seq = redis.call('INCR', KEYS[1])
+
+        -- Combine timestamp and sequence (last 4 digits)
+        -- Format: timestamp(microseconds) + sequence(last 4 digits)
+        local sequence = timestamp * 10000 + (seq % 10000)
+        return sequence
+    `
+
+	result := tx.Eval(ctx, script, []string{TransactionSeqKey})
+
+	_, err := tx.Exec(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("failed to execute transaction: %w", err)
+	}
+
+	sequence, err := result.Int64()
+	if err != nil {
+		return 0, fmt.Errorf("failed to get sequence: %w", err)
+	}
+
+	return sequence, nil
 }
