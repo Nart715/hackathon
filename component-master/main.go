@@ -49,20 +49,15 @@ func depositAccount(i int) {
 	header := NewHttpHeader()
 	method := "POST"
 
-	depositRequest.Ac = int64(i)
-	depositRequest.Tx = int64(i) + 1000
-	depositRequest.Am = 100
-	depositRequest.Act = 0
-	dataJson, _ := json.Marshal(depositRequest)
 	// transaction_id := idgen.GenID()
-	// localRequestCreateUrl := &account.BalanceChangeRequest{
-	// 	Ac:  int64(i),
-	// 	Tx:  int64(i) + 1000,
-	// 	Am:  100,
-	// 	Act: 0,
-	// }
+	localRequestCreateUrl := &account.BalanceChangeRequest{
+		Ac:  int64(i),
+		Tx:  int64(i) + 1000,
+		Am:  100,
+		Act: 0,
+	}
 
-	// dataJson, _ := json.Marshal(localRequestCreateUrl)
+	dataJson, _ := json.Marshal(localRequestCreateUrl)
 
 	requestString := string(dataJson)
 	fmt.Println("INTERNAL >> ", requestString)
