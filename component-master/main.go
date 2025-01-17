@@ -41,7 +41,7 @@ func init() {
 
 func main() {
 	execute(create1000kAccounts)
-	execute(depositAccount)
+	// execute(depositAccount)
 }
 
 func depositAccount(i int) {
@@ -54,6 +54,15 @@ func depositAccount(i int) {
 	depositRequest.Am = 100
 	depositRequest.Act = 0
 	dataJson, _ := json.Marshal(depositRequest)
+	// transaction_id := idgen.GenID()
+	// localRequestCreateUrl := &account.BalanceChangeRequest{
+	// 	Ac:  int64(i),
+	// 	Tx:  int64(i) + 1000,
+	// 	Am:  100,
+	// 	Act: 0,
+	// }
+
+	// dataJson, _ := json.Marshal(localRequestCreateUrl)
 
 	requestString := string(dataJson)
 	fmt.Println("INTERNAL >> ", requestString)

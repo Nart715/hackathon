@@ -36,7 +36,9 @@ func getNodeID(workerID int) (int64, error) {
 
 // GenID generates a unique ID
 // exp: id := idgen.GenID()
-func GenID(nodeID int64) int64 {
+func GenID() int64 {
+	workerID := 1
+	nodeID, err := getNodeID(workerID)
 	sf, err := NewSnowflake(nodeID)
 	if err != nil {
 		slog.Error("Failed to create Snowflake instance", "error", err)
