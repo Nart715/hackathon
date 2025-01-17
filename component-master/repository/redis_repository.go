@@ -20,6 +20,11 @@ var (
 	pipelineSize    = int64(1)
 	pipelineTimeout = 100 * time.Millisecond
 
+	MAP_BALANCE_CHANGE = map[int32]int64{
+		int32(proto.Action_DEBIT.Number()):  -1,
+		int32(proto.Action_CREDIT.Number()): 1,
+	}
+
 	count       int
 	redisCtx    = context.Background()
 	safeCounter *SafeCounter
@@ -40,6 +45,84 @@ var (
 	TransactionExpiryDuration = 24 * time.Hour
 
 	TransactionSeqKeyAccount = "ac:%d:tx"
+
+	TransactionSequenceAutoIncrementKey = "tx:sequence"
+
+	// Lua script to check and increase balance atomically
+	scriptDebit = `
+        local balance = redis.call('HGET', KEYS[1], ARGV[1])
+        local amount = tonumber(ARGV[2])
+        balance = tonumber(balance)
+
+        -- Check if balance would go negative
+        if (balance + amount) < 0 then
+            return 0  -- Return 0 if balance would be negative
+        end
+
+        -- If not negative, increase balance and update timestamp
+        redis.call('HINCRBY', KEYS[1], ARGV[1], amount)
+        redis.call('HSET', KEYS[1], ARGV[3], ARGV[4])
+        return 1  -- Return 1 for successful increase
+    `
+
+	scriptCredit = `
+        local balance = redis.call('HGET', KEYS[1], ARGV[1])
+        local amount = tonumber(ARGV[2])
+        balance = tonumber(balance)
+
+        redis.call('HINCRBY', KEYS[1], ARGV[1], amount)
+        redis.call('HSET', KEYS[1], ARGV[3], ARGV[4])
+        return 1  -- Return 1 for successful increase
+    `
+
+	mapActionScript = map[int32]string{
+		0: scriptCredit,
+		1: scriptDebit,
+	}
+
+	scriptAddTransactionAccount = `
+        local key = KEYS[1]          -- tx:transactionValidate
+        local transactionId = ARGV[1] -- transaction ID
+        local jsonData = ARGV[2]      -- JSON data
+        local expiry = ARGV[3]        -- expiry time
+
+        -- Add transaction and set expiry
+        redis.call('HSET', key, transactionId, jsonData)
+        redis.call('EXPIRE', key, expiry)
+        return 1  -- New transaction recorded
+    `
+
+	// Lua script for atomic check and add
+	scriptValidateAndAddTranaction = `
+        local key = KEYS[1]          -- tx:transactionValidate
+        local transactionId = ARGV[1] -- transaction ID
+        local jsonData = ARGV[2]      -- JSON data
+        local expiry = ARGV[3]        -- expiry time
+
+        -- Check if transaction exists
+        if redis.call('HEXISTS', key, transactionId) == 1 then
+            return 0  -- Transaction already exists
+        end
+
+        -- Add transaction and set expiry
+        redis.call('HSET', key, transactionId, jsonData)
+        redis.call('EXPIRE', key, expiry)
+        return 1  -- New transaction recorded
+    `
+
+	scriptGenerateTransactionBySequence = `
+        -- Get current timestamp in microseconds
+        local ts = redis.call('TIME')
+        local timestamp = ts[1] * 1000000 + ts[2]
+
+        -- Get sequence number and increment
+        local seq = redis.call('INCR', KEYS[1])
+
+        -- Combine timestamp and sequence (last 4 digits)
+        -- Format: timestamp(microseconds) + sequence(last 4 digits)
+        local sequence = timestamp * 10000 + (seq % 10000)
+        return sequence
+    `
 )
 
 type SafeCounter struct {
@@ -142,25 +225,7 @@ func (r *redisRepository) validateAndRecordTransaction(ctx context.Context, tran
 
 	transactionID := strconv.FormatInt(transactionId, 10)
 
-	// Lua script for atomic check and add
-	script := `
-        local key = KEYS[1]          -- tx:transactionValidate
-        local transactionId = ARGV[1] -- transaction ID
-        local jsonData = ARGV[2]      -- JSON data
-        local expiry = ARGV[3]        -- expiry time
-
-        -- Check if transaction exists
-        if redis.call('HEXISTS', key, transactionId) == 1 then
-            return 0  -- Transaction already exists
-        end
-
-        -- Add transaction and set expiry
-        redis.call('HSET', key, transactionId, jsonData)
-        redis.call('EXPIRE', key, expiry)
-        return 1  -- New transaction recorded
-    `
-
-	result := tx.Eval(ctx, script,
+	result := tx.Eval(ctx, scriptValidateAndAddTranaction,
 		[]string{"tx:transactionValidate"},
 		transactionID,
 		inputJsonData,
@@ -189,19 +254,8 @@ func (r *redisRepository) addTransactionByAccountId(ctx context.Context, account
 	redisAccountKey := mapKeyInt64toString(TransactionSeqKeyAccount, accountId)
 
 	// Lua script for atomic check and add
-	script := `
-        local key = KEYS[1]          -- tx:transactionValidate
-        local transactionId = ARGV[1] -- transaction ID
-        local jsonData = ARGV[2]      -- JSON data
-        local expiry = ARGV[3]        -- expiry time
 
-        -- Add transaction and set expiry
-        redis.call('HSET', key, transactionId, jsonData)
-        redis.call('EXPIRE', key, expiry)
-        return 1  -- New transaction recorded
-    `
-
-	result := tx.Eval(ctx, script,
+	result := tx.Eval(ctx, scriptAddTransactionAccount,
 		[]string{redisAccountKey},
 		transactionID,
 		inputJsonData,
@@ -263,27 +317,11 @@ func (r *redisRepository) BalanceChange(ctx context.Context, input *proto.Balanc
 
 	tx := r.pipeline.TxPipeline()
 
-	// Lua script to check and increase balance atomically
-	script := `
-        local balance = redis.call('HGET', KEYS[1], ARGV[1])
-        local amount = tonumber(ARGV[2])
-        balance = tonumber(balance)
-
-        -- Check if balance would go negative
-        if (balance + amount) < 0 then
-            return 0  -- Return 0 if balance would be negative
-        end
-
-        -- If not negative, increase balance and update timestamp
-        redis.call('HINCRBY', KEYS[1], ARGV[1], amount)
-        redis.call('HSET', KEYS[1], ARGV[3], ARGV[4])
-        return 1  -- Return 1 for successful increase
-    `
-
-	// Execute the script with parameters
+	script := mapActionScript[input.Act]
+	amountBalance := MAP_BALANCE_CHANGE[input.Act] * amount
 	result := tx.Eval(ctx, script, []string{accountKey},
 		BalanceField,
-		amount,
+		amountBalance,
 		UpdatedAtField,
 		time.Now().UnixMicro())
 
@@ -354,21 +392,7 @@ func (r *redisRepository) GenerateTransactionSeq(ctx context.Context) (int64, er
 
 	tx := r.pipeline.TxPipeline()
 
-	script := `
-        -- Get current timestamp in microseconds
-        local ts = redis.call('TIME')
-        local timestamp = ts[1] * 1000000 + ts[2]
-
-        -- Get sequence number and increment
-        local seq = redis.call('INCR', KEYS[1])
-
-        -- Combine timestamp and sequence (last 4 digits)
-        -- Format: timestamp(microseconds) + sequence(last 4 digits)
-        local sequence = timestamp * 10000 + (seq % 10000)
-        return sequence
-    `
-
-	result := tx.Eval(ctx, script, []string{""})
+	result := tx.Eval(ctx, scriptGenerateTransactionBySequence, []string{TransactionSequenceAutoIncrementKey})
 
 	_, err := tx.Exec(ctx)
 	if err != nil {

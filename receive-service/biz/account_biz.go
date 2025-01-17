@@ -8,13 +8,6 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-var (
-	MAP_BALANCE_CHANGE = map[int32]int64{
-		int32(proto.Action_DEBIT.Number()):  -1,
-		int32(proto.Action_CREDIT.Number()): 1,
-	}
-)
-
 type AccountBiz interface {
 	CreateAccount(ctx context.Context, req *proto.CreateAccountRequest) (*proto.CreateAccountResponse, error)
 	BalanceChange(ctx context.Context, req *proto.BalanceChangeRequest) (*proto.BalanceChangeResponse, error)
@@ -54,7 +47,6 @@ func (a *accountBiz) CreateAccount(ctx context.Context, req *proto.CreateAccount
 }
 
 func (a *accountBiz) BalanceChange(ctx context.Context, req *proto.BalanceChangeRequest) (*proto.BalanceChangeResponse, error) {
-	req.Am = MAP_BALANCE_CHANGE[req.Act] * req.GetAm()
 	g, ctx := errgroup.WithContext(ctx)
 	g.Go(func() error {
 		var err error
