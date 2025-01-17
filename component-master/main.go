@@ -42,7 +42,7 @@ func init() {
 
 func main() {
 	execute(create1000kAccounts)
-	// execute(depositAccount)
+	execute(depositAccount)
 }
 
 func depositAccount(i int) {
