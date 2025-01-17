@@ -49,7 +49,6 @@ message BalanceChangeRequest {
   int64 tx = 2;
   int64 am = 3;
   int32 act = 4;
-  int64 t = 5;
 }
 
 message BalanceChangeResponse {

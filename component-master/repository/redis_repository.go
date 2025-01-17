@@ -24,11 +24,14 @@ var (
 	redisCtx    = context.Background()
 	safeCounter *SafeCounter
 
-	AccountIdField    = "1"
-	BalanceField      = "2"
-	UpdatedAtField    = "3"
-	TranactionIdField = "4"
-	ActionField       = "5"
+	AccountIdField = "1"
+	BalanceField   = "2"
+	UpdatedAtField = "3"
+
+	TranactionIdField = "2"
+	AmountField       = "3"
+	ActionField       = "4"
+	CreatedAtField    = "5"
 
 	TransactionSetKeyValidate = "tx:validate"
 
@@ -222,11 +225,15 @@ func (r *redisRepository) BalanceChange(ctx context.Context, input *proto.Balanc
 	amount := input.Am
 	transactionId := input.Tx
 
-	fmt.Println("Amount: ", amount)
-
-	input.T = time.Now().UnixMicro()
+	mapRequestTransaction := map[string]interface{}{
+		AccountIdField:    accountId,
+		TranactionIdField: transactionId,
+		AmountField:       amount,
+		ActionField:       int32(input.Act),
+		CreatedAtField:    time.Now().UnixMicro(),
+	}
 	// Marshal the request to JSON
-	jsonData, err := json.Marshal(input)
+	jsonData, err := json.Marshal(mapRequestTransaction)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal transaction data: %w", err)
 	}
