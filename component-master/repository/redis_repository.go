@@ -4,6 +4,7 @@ import (
 	"component-master/infra/redis"
 	proto "component-master/proto/account"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -23,16 +24,19 @@ var (
 	redisCtx    = context.Background()
 	safeCounter *SafeCounter
 
-	AccountIdField = "1"
-	BalanceField   = "2"
-	CreatedAtField = "3"
-	UpdatedAtField = "4"
+	AccountIdField    = "1"
+	BalanceField      = "2"
+	UpdatedAtField    = "3"
+	TranactionIdField = "4"
+	ActionField       = "5"
 
-	TransactionSetKeyPrefix = "account:%d:transactions"
+	TransactionSetKeyValidate = "tx:validate"
+
+	AccountSetKeyPrefix = "ac:%d"
 
 	TransactionExpiryDuration = 24 * time.Hour
 
-	TransactionSeqKey = "transaction:sequence"
+	TransactionSeqKeyAccount = "ac:%d:tx"
 )
 
 type SafeCounter struct {
@@ -64,7 +68,7 @@ func tryLock(m *SafeCounter, timeout time.Duration) bool {
 type RedisRepository interface {
 	GetRedis() *redisv9.ClusterClient
 	CreateAccount(ctx context.Context, req *proto.CreateAccountRequest) (*proto.CreateAccountResponse, error)
-	BalanceChange(ctx context.Context, accountId, amount, transactionId int64) (*proto.BalanceChangeResponse, error)
+	BalanceChange(ctx context.Context, req *proto.BalanceChangeRequest) (*proto.BalanceChangeResponse, error)
 	GenerateTransactionSeq(ctx context.Context) (int64, error)
 }
 
@@ -96,13 +100,12 @@ func (r *redisRepository) CreateAccount(ctx context.Context, req *proto.CreateAc
 	account := map[string]interface{}{
 		AccountIdField: req.AccountId,
 		BalanceField:   int64(0),
-		CreatedAtField: time.Now().UnixMicro(),
 		UpdatedAtField: time.Now().UnixMicro(),
 	}
 
 	// Add operation to pipeline with mutex protection
 	r.pipelineMu.Lock()
-	accountKey := mapKeyInt64toString(req.AccountId)
+	accountKey := mapKeyInt64toString(AccountSetKeyPrefix, req.AccountId)
 	err := r.pipeline.HSet(ctx, accountKey, account).Err()
 	r.pipelineMu.Unlock()
 	if err != nil {
@@ -123,37 +126,41 @@ func (r *redisRepository) CreateAccount(ctx context.Context, req *proto.CreateAc
 	accountData := proto.AccountData{
 		AccountId: account[AccountIdField].(int64),
 		Balance:   account[BalanceField].(int64),
-		CreatedAt: account[CreatedAtField].(int64),
 		UpdatedAt: account[UpdatedAtField].(int64),
 	}
 	return &proto.CreateAccountResponse{Code: 0, Message: "Successs", Data: &accountData}, nil
 }
 
-func (r *redisRepository) validateAndRecordTransaction(ctx context.Context, accountId, transactionId int64) (bool, error) {
-	transactionKey := fmt.Sprintf(TransactionSetKeyPrefix, accountId)
-
+func (r *redisRepository) validateAndRecordTransaction(ctx context.Context, transactionId int64, inputJsonData string) (bool, error) {
 	r.pipelineMu.Lock()
 	defer r.pipelineMu.Unlock()
 
 	tx := r.pipeline.TxPipeline()
 
-	// use lua script for atomic check and add
+	transactionID := strconv.FormatInt(transactionId, 10)
+
+	// Lua script for atomic check and add
 	script := `
+        local key = KEYS[1]          -- tx:transactionValidate
+        local transactionId = ARGV[1] -- transaction ID
+        local jsonData = ARGV[2]      -- JSON data
+        local expiry = ARGV[3]        -- expiry time
+
         -- Check if transaction exists
-        if redis.call('SISMEMBER', KEYS[1], ARGV[1]) == 1 then
+        if redis.call('HEXISTS', key, transactionId) == 1 then
             return 0  -- Transaction already exists
         end
 
         -- Add transaction and set expiry
-        redis.call('SADD', KEYS[1], ARGV[1])
-        redis.call('EXPIRE', KEYS[1], ARGV[2])
+        redis.call('HSET', key, transactionId, jsonData)
+        redis.call('EXPIRE', key, expiry)
         return 1  -- New transaction recorded
     `
 
-	// execute script with transaction id and expiry time
 	result := tx.Eval(ctx, script,
-		[]string{transactionKey},
-		transactionId,
+		[]string{"tx:transactionValidate"},
+		transactionID,
+		inputJsonData,
 		int(TransactionExpiryDuration.Seconds()))
 
 	_, err := tx.Exec(ctx)
@@ -169,11 +176,71 @@ func (r *redisRepository) validateAndRecordTransaction(ctx context.Context, acco
 	return success == 1, nil
 }
 
-func (r *redisRepository) BalanceChange(ctx context.Context, accountId, amount, transactionId int64) (*proto.BalanceChangeResponse, error) {
-	isValid, err := r.validateAndRecordTransaction(ctx, accountId, transactionId)
+func (r *redisRepository) addTransactionByAccountId(ctx context.Context, accountId int64, transactionId int64, inputJsonData string) (bool, error) {
+	r.pipelineMu.Lock()
+	defer r.pipelineMu.Unlock()
+
+	tx := r.pipeline.TxPipeline()
+
+	transactionID := strconv.FormatInt(transactionId, 10)
+	redisAccountKey := mapKeyInt64toString(TransactionSeqKeyAccount, accountId)
+
+	// Lua script for atomic check and add
+	script := `
+        local key = KEYS[1]          -- tx:transactionValidate
+        local transactionId = ARGV[1] -- transaction ID
+        local jsonData = ARGV[2]      -- JSON data
+        local expiry = ARGV[3]        -- expiry time
+
+        -- Add transaction and set expiry
+        redis.call('HSET', key, transactionId, jsonData)
+        redis.call('EXPIRE', key, expiry)
+        return 1  -- New transaction recorded
+    `
+
+	result := tx.Eval(ctx, script,
+		[]string{redisAccountKey},
+		transactionID,
+		inputJsonData,
+		int(TransactionExpiryDuration.Seconds()))
+
+	_, err := tx.Exec(ctx)
+	if err != nil {
+		return false, fmt.Errorf("failed to execute transaction: %w", err)
+	}
+
+	success, err := result.Int64()
+	if err != nil {
+		return false, fmt.Errorf("failed to get result: %w", err)
+	}
+
+	return success == 1, nil
+}
+
+func (r *redisRepository) BalanceChange(ctx context.Context, input *proto.BalanceChangeRequest) (*proto.BalanceChangeResponse, error) {
+	accountId := input.Ac
+	amount := input.Am
+	transactionId := input.Tx
+
+	fmt.Println("Amount: ", amount)
+
+	input.T = time.Now().UnixMicro()
+	// Marshal the request to JSON
+	jsonData, err := json.Marshal(input)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal transaction data: %w", err)
+	}
+
+	fmt.Println("JsonData: ", string(jsonData))
+
+	inputJsonData := string(jsonData)
+
+	isValid, err := r.validateAndRecordTransaction(ctx, transactionId, inputJsonData)
 	if err != nil {
 		return nil, fmt.Errorf("failed to validate transaction: %w", err)
 	}
+
+	r.addTransactionByAccountId(ctx, accountId, transactionId, inputJsonData)
 
 	if !isValid {
 		slog.Error("duplicate transaction detected",
@@ -182,7 +249,7 @@ func (r *redisRepository) BalanceChange(ctx context.Context, accountId, amount, 
 		return nil, errors.New("duplicate transaction")
 	}
 
-	accountKey := mapKeyInt64toString(accountId)
+	accountKey := mapKeyInt64toString(AccountSetKeyPrefix, accountId)
 
 	r.pipelineMu.Lock()
 	defer r.pipelineMu.Unlock()
@@ -236,8 +303,8 @@ func (r *redisRepository) BalanceChange(ctx context.Context, accountId, amount, 
 	return &proto.BalanceChangeResponse{Code: 0, Message: "Success"}, nil
 }
 
-func mapKeyInt64toString(key int64) string {
-	return strconv.Itoa(int(key))
+func mapKeyInt64toString(prefix string, key int64) string {
+	return fmt.Sprintf(prefix, key)
 }
 
 func (r *redisRepository) flushPipeline(ctx context.Context) error {
@@ -294,7 +361,7 @@ func (r *redisRepository) GenerateTransactionSeq(ctx context.Context) (int64, er
         return sequence
     `
 
-	result := tx.Eval(ctx, script, []string{TransactionSeqKey})
+	result := tx.Eval(ctx, script, []string{""})
 
 	_, err := tx.Exec(ctx)
 	if err != nil {

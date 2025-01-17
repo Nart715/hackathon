@@ -4,8 +4,8 @@ package account;
 option go_package ="proto/account";
 
 enum Action {
-  DEPOSIT = 0;
-  CREDIT  = 1;
+  CREDIT  = 0;
+  DEBIT = 1;
 }
 
 message CreateAccountRequest {
@@ -21,7 +21,6 @@ message CreateAccountResponse {
 message AccountData {
   int64 accountId = 1;
   int64 balance = 2;
-  int64 createdAt = 3;
   int64 updatedAt = 4;
 }
 
@@ -34,13 +33,23 @@ message DepositAccountResponse {
   int64 code = 1;
   string message = 2;
   AccountData data = 3;
- }
+}
+
+enum FIELD_NAME {
+  FIELD_MARK = 0;
+  FIELD_NAME_ACCOUNT_ID = 1;
+  FIELD_NAME_AMOUNT = 2;
+  FIELD_NAME_ACTION = 3;
+  FIELD_NAME_TRANSACTION_ID = 4;
+  FIELD_NAME_CREATED_AT = 5;
+}
 
 message BalanceChangeRequest {
-  int64 accountId = 1;
-  int64 amount = 2;
-  int64 action = 3;
-  int64 transactionId = 4;
+  int64 ac = 1;
+  int64 tx = 2;
+  int64 am = 3;
+  int32 act = 4;
+  int64 t = 5;
 }
 
 message BalanceChangeResponse {

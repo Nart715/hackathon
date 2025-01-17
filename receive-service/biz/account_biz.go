@@ -9,9 +9,9 @@ import (
 )
 
 var (
-	MAP_BALANCE_CHANGE = map[proto.Action]int64{
-		proto.Action_DEPOSIT: 1,
-		proto.Action_CREDIT:  -1,
+	MAP_BALANCE_CHANGE = map[int32]int64{
+		int32(proto.Action_DEBIT.Number()):  -1,
+		int32(proto.Action_CREDIT.Number()): 1,
 	}
 )
 
@@ -54,11 +54,11 @@ func (a *accountBiz) CreateAccount(ctx context.Context, req *proto.CreateAccount
 }
 
 func (a *accountBiz) BalanceChange(ctx context.Context, req *proto.BalanceChangeRequest) (*proto.BalanceChangeResponse, error) {
-	amount := MAP_BALANCE_CHANGE[proto.Action(req.GetAction())] * req.GetAmount()
+	req.Am = MAP_BALANCE_CHANGE[req.Act] * req.GetAm()
 	g, ctx := errgroup.WithContext(ctx)
 	g.Go(func() error {
 		var err error
-		_, err = a.rd.BalanceChange(ctx, req.GetAccountId(), amount, req.GetTransactionId())
+		_, err = a.rd.BalanceChange(ctx, req)
 		return err
 	})
 	if err := g.Wait(); err != nil {
