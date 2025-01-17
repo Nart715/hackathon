@@ -35,13 +35,10 @@ func getNodeID(workerID int) (int64, error) {
 }
 
 // GenID generates a unique ID
-// exp: id := idgen.GenID()
+// Example usage: id := idgen.GenID()
 func GenID() int64 {
-	workerID := 1
-	nodeID, err := getNodeID(workerID)
-	sf, err := NewSnowflake(nodeID)
-	if err != nil {
-		slog.Error("Failed to create Snowflake instance", "error", err)
+	if sf == nil {
+		slog.Error("Snowflake instance is not initialized")
 		return 0
 	}
 	return sf.Generate()

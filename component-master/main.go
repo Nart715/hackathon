@@ -4,6 +4,7 @@ import (
 	"component-master/config"
 	"component-master/infra/redis"
 	"component-master/proto/account"
+	"component-master/shared/idgen"
 	"component-master/util"
 	"encoding/json"
 	"fmt"
@@ -49,10 +50,10 @@ func depositAccount(i int) {
 	header := NewHttpHeader()
 	method := "POST"
 
-	// transaction_id := idgen.GenID()
+	transaction_id := idgen.GenID()
 	localRequestCreateUrl := &account.BalanceChangeRequest{
 		Ac:  int64(i),
-		Tx:  int64(i) + 1000,
+		Tx:  transaction_id,
 		Am:  100,
 		Act: 0,
 	}
