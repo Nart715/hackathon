@@ -20,6 +20,7 @@ var (
 	depositUrl       = "http://localhost:8081/api/v1/player/balance-change"
 	bettingUrl       = "http://localhost:8081/api/v1/player/balance-change"
 	requestCreateUrl = &account.CreateAccountRequest{}
+	depositRequest   = &account.BalanceChangeRequest{}
 )
 
 func NewHttpClient() http.Client {
@@ -40,6 +41,37 @@ func init() {
 
 func main() {
 	execute(create1000kAccounts)
+	execute(depositAccount)
+}
+
+func depositAccount(i int) {
+	httpClient := NewHttpClient()
+	header := NewHttpHeader()
+	method := "POST"
+
+	depositRequest.Ac = int64(i)
+	depositRequest.Tx = int64(i) + 1000
+	depositRequest.Am = 100
+	depositRequest.Act = 0
+	dataJson, _ := json.Marshal(depositRequest)
+
+	requestString := string(dataJson)
+	fmt.Println("INTERNAL >> ", requestString)
+	data := strings.NewReader(requestString)
+	req, _ := http.NewRequest(method, bettingUrl, data)
+	req.Header = header
+	res, err := httpClient.Do(req)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	defer res.Body.Close()
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	fmt.Println(string(body))
 }
 
 func create1000kAccounts(i int) {

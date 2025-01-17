@@ -44,7 +44,7 @@ func execute(snapshot func(i int)) {
 
 	// Start a goroutine to send jobs
 	go func() {
-		for i := 1; i <= 1000000; i++ {
+		for i := 1; i <= 10_000; i++ {
 			jobs <- i
 		}
 		close(jobs)
