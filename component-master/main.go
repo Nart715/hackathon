@@ -41,7 +41,7 @@ func init() {
 
 func main() {
 	execute(create1000kAccounts)
-	execute(depositAccount)
+	// execute(depositAccount)
 }
 
 func depositAccount(i int) {
@@ -54,6 +54,15 @@ func depositAccount(i int) {
 	depositRequest.Am = 100
 	depositRequest.Act = 0
 	dataJson, _ := json.Marshal(depositRequest)
+	// transaction_id := idgen.GenID()
+	// localRequestCreateUrl := &account.BalanceChangeRequest{
+	// 	Ac:  int64(i),
+	// 	Tx:  int64(i) + 1000,
+	// 	Am:  100,
+	// 	Act: 0,
+	// }
+
+	// dataJson, _ := json.Marshal(localRequestCreateUrl)
 
 	requestString := string(dataJson)
 	fmt.Println("INTERNAL >> ", requestString)
@@ -78,9 +87,13 @@ func create1000kAccounts(i int) {
 	httpClient := NewHttpClient()
 	header := NewHttpHeader()
 	method := "POST"
-	requestCreateUrl.AccountId = int64(i)
-	dataJson, _ := json.Marshal(requestCreateUrl)
 
+	// deep copy to fix goroutine the same time
+	localRequestCreateUrl := &account.CreateAccountRequest{
+		AccountId: int64(i),
+	}
+
+	dataJson, _ := json.Marshal(localRequestCreateUrl)
 	requestString := string(dataJson)
 	fmt.Println("INTERNAL >> ", requestString)
 	data := strings.NewReader(requestString)
@@ -93,8 +106,8 @@ func create1000kAccounts(i int) {
 	}
 	defer res.Body.Close()
 	body, err := io.ReadAll(res.Body)
-	if err != nil {
-		fmt.Println(err)
+	if err != nil || res.StatusCode != http.StatusOK {
+		fmt.Printf("Failed to create account %d: %v\n", i, err)
 		return
 	}
 	fmt.Println(string(body))

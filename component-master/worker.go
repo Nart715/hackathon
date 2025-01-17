@@ -27,8 +27,8 @@ func execute(snapshot func(i int)) {
 	numWorkers := runtime.NumCPU()
 
 	// Create channels for job distribution
-	jobs := make(chan int, 1000)
-	results := make(chan int, 1000)
+	jobs := make(chan int, 10000)
+	results := make(chan int, 10000)
 
 	// Create a wait group to track workers
 	var wg sync.WaitGroup
@@ -44,7 +44,7 @@ func execute(snapshot func(i int)) {
 
 	// Start a goroutine to send jobs
 	go func() {
-		for i := 1; i <= 10_000; i++ {
+		for i := 1; i <= 100_000; i++ {
 			jobs <- i
 		}
 		close(jobs)
