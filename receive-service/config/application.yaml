@@ -13,7 +13,9 @@ redis:
   writeTimeout: 10s
   readOnly: true
   routeRandomly: true
-  maxRedirects: 3
+  maxRedirects: 6
+  poolSize: 100
+  minIdleConns: 6
   clusters:
     - "localhost:7001"
     - "localhost:7002"
@@ -22,4 +24,30 @@ redis:
     - "localhost:7005"
     - "localhost:7006"
 
+kafka:
+  clientId: hackathon-consumer-client
+  dialTimeout: 10s
+  readTimeout: 10s
+  writeTimeout: 10s
+  maxRetry: 3
+  retryBackoff: 10s
+  refreshFrequency: 10s
+  brokers:
+    - "localhost:9092"
+  consumer:
+    groupId: hackathon-consumer
+    maxWorkers: 10
+    minWorkers: 10
+    maxWaitTime: 10s
+    offsetReset: earliest
+    autoCommit: true
+  producer:
+    maxMessageBytes: 1024
+    compression: snappy
+    flushFrequency: 10s
+    flushBytes: 1024
+    retryMax: 3
+    retryBackoff: 10s
 
+kafkaTopics:
+  - balanceChange: account.balance.change

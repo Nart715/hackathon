@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -20,7 +19,7 @@ var (
 	pipelineSize    = int64(1)
 	pipelineTimeout = 100 * time.Millisecond
 
-	MAP_BALANCE_CHANGE = map[int32]int64{
+	MAP_BALANCE_CHANGE = map[int32]int32{
 		int32(proto.Action_DEBIT.Number()):  -1,
 		int32(proto.Action_CREDIT.Number()): 1,
 	}
@@ -185,7 +184,7 @@ func (r *redisRepository) CreateAccount(ctx context.Context, req *proto.CreateAc
 	slog.Info("Create account")
 	account := map[string]interface{}{
 		AccountIdField: req.AccountId,
-		BalanceField:   int64(0),
+		BalanceField:   int32(0),
 		UpdatedAtField: time.Now().UnixMicro(),
 	}
 
@@ -210,24 +209,22 @@ func (r *redisRepository) CreateAccount(ctx context.Context, req *proto.CreateAc
 	}
 
 	accountData := proto.AccountData{
-		AccountId: account[AccountIdField].(int64),
-		Balance:   account[BalanceField].(int64),
+		AccountId: account[AccountIdField].(int32),
+		Balance:   account[BalanceField].(int32),
 		UpdatedAt: account[UpdatedAtField].(int64),
 	}
 	return &proto.CreateAccountResponse{Code: 0, Message: "Successs", Data: &accountData}, nil
 }
 
-func (r *redisRepository) validateAndRecordTransaction(ctx context.Context, transactionId int64, inputJsonData string) (bool, error) {
+func (r *redisRepository) validateAndRecordTransaction(ctx context.Context, transactionId int32, inputJsonData string) (bool, error) {
 	r.pipelineMu.Lock()
 	defer r.pipelineMu.Unlock()
 
 	tx := r.pipeline.TxPipeline()
 
-	transactionID := strconv.FormatInt(transactionId, 10)
-
 	result := tx.Eval(ctx, scriptValidateAndAddTranaction,
 		[]string{"tx:transactionValidate"},
-		transactionID,
+		transactionId,
 		inputJsonData,
 		int(TransactionExpiryDuration.Seconds()))
 
@@ -244,20 +241,19 @@ func (r *redisRepository) validateAndRecordTransaction(ctx context.Context, tran
 	return success == 1, nil
 }
 
-func (r *redisRepository) addTransactionByAccountId(ctx context.Context, accountId int64, transactionId int64, inputJsonData string) (bool, error) {
+func (r *redisRepository) addTransactionByAccountId(ctx context.Context, accountId int32, transactionId int32, inputJsonData string) (bool, error) {
 	r.pipelineMu.Lock()
 	defer r.pipelineMu.Unlock()
 
 	tx := r.pipeline.TxPipeline()
 
-	transactionID := strconv.FormatInt(transactionId, 10)
 	redisAccountKey := mapKeyInt64toString(TransactionSeqKeyAccount, accountId)
 
 	// Lua script for atomic check and add
 
 	result := tx.Eval(ctx, scriptAddTransactionAccount,
 		[]string{redisAccountKey},
-		transactionID,
+		transactionId,
 		inputJsonData,
 		int(TransactionExpiryDuration.Seconds()))
 
@@ -348,7 +344,7 @@ func (r *redisRepository) BalanceChange(ctx context.Context, input *proto.Balanc
 	return &proto.BalanceChangeResponse{Code: 0, Message: "Success"}, nil
 }
 
-func mapKeyInt64toString(prefix string, key int64) string {
+func mapKeyInt64toString(prefix string, key int32) string {
 	return fmt.Sprintf(prefix, key)
 }
 

@@ -27,8 +27,8 @@ func NewInitRedisClient(rd *config.RedisConfig) (*RedisClient, error) {
 		ReadTimeout:   rd.ReadTimeout,
 		WriteTimeout:  rd.WriteTimeout,
 
-		MinIdleConns: 6,
-		PoolSize:     10,
+		MinIdleConns: rd.MinIdleConns,
+		PoolSize:     rd.PoolSize,
 	}
 
 	client := redis.NewClusterClient(&redisClusterOps)

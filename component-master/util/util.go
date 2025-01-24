@@ -3,6 +3,7 @@ package util
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"log/slog"
 	"time"
@@ -13,7 +14,7 @@ import (
 
 const (
 	letters        = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-	ContextTimeout = 120 * time.Second
+	ContextTimeout = 120 * time.Millisecond
 )
 
 func LoadEnv() {
@@ -62,4 +63,8 @@ func cancelContext(timeout time.Duration, cancel context.CancelFunc) {
 	time.Sleep(timeout)
 	cancel()
 	slog.Info("context canceled")
+}
+
+func String(pattern string, args ...any) string {
+	return fmt.Sprintf(pattern, args...)
 }

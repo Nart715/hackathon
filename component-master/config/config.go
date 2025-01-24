@@ -12,9 +12,11 @@ import (
 )
 
 type Config struct {
-	Server     ServerConfig     `mapstructure:"server" json:"server,omitempty"`
-	Redis      RedisConfig      `mapstructure:"redis" json:"redis,omitempty"`
-	GrpcClient GrpcConfigClient `mapstructure:"grpcClient" json:"grpc_client,omitempty"`
+	Server      ServerConfig     `mapstructure:"server" json:"server,omitempty"`
+	Redis       RedisConfig      `mapstructure:"redis" json:"redis,omitempty"`
+	GrpcClient  GrpcConfigClient `mapstructure:"grpcClient" json:"grpc_client,omitempty"`
+	Kafka       KafkaConfig      `mapstructure:"kafka" json:"kafka,omitempty"`
+	KafkaTopics []KafkaTopic     `mapstructure:"kafkaTopics" json:"kafka_topics,omitempty"`
 }
 
 type ServerConfig struct {
@@ -45,7 +47,43 @@ type RedisConfig struct {
 	ReadOnly      bool          `mapstructure:"readOnly" json:"read_only,omitempty"`
 	RouteRandomly bool          `mapstructure:"routeRandomly" json:"route_randomly,omitempty"`
 	MaxRedirects  int           `mapstructure:"maxRedirects" json:"max_redirects,omitempty"`
+	PoolSize      int           `mapstructure:"poolSize" json:"pool_size,omitempty"`
+	MinIdleConns  int           `mapstructure:"minIdleConns" json:"min_idle_conns,omitempty"`
 	Clusters      []string      `mapstructure:"clusters" json:"clusters,omitempty"`
+}
+
+type KafkaConfig struct {
+	ClientId         string         `mapstructure:"clientId" json:"client_id,omitempty"`
+	DialTimeout      time.Duration  `mapstructure:"dialTimeout" json:"dial_timeout,omitempty"`
+	ReadTimeout      time.Duration  `mapstructure:"readTimeout" json:"read_timeout,omitempty"`
+	WriteTimeout     time.Duration  `mapstructure:"writeTimeout" json:"write_timeout,omitempty"`
+	MaxRetry         int            `mapstructure:"maxRetry" json:"max_retry,omitempty"`
+	RetryBackoff     time.Duration  `mapstructure:"retryBackoff" json:"retry_backoff,omitempty"`
+	RefreshFrequency time.Duration  `mapstructure:"refreshFrequency" json:"refresh_frequency,omitempty"`
+	Brokers          []string       `mapstructure:"brokers" json:"brokers,omitempty"`
+	Consumer         ConsumerConfig `mapstructure:"consumer" json:"consumer,omitempty"`
+	Producer         ProducerConfig `mapstructure:"producer" json:"producer,omitempty"`
+}
+
+type ConsumerConfig struct {
+	GroupId           string        `mapstructure:"groupId" json:"group_id,omitempty"`
+	MaxProcessingTime time.Duration `mapstructure:"maxProcessingTime" json:"max_processing_time,omitempty"`
+	FetchMin          int32         `mapstructure:"fetchMin" json:"fetch_min,omitempty"`
+	FetchMax          int32         `mapstructure:"fetchMax" json:"fetch_max,omitempty"`
+	RetryBackoff      time.Duration `mapstructure:"retryBackoff" json:"retry_backoff,omitempty"`
+}
+
+type ProducerConfig struct {
+	MaxMessageBytes int           `mapstructure:"maxMessageBytes" json:"max_message_bytes,omitempty"`
+	Compression     string        `mapstructure:"compression" json:"compression,omitempty"`
+	FlushFrequency  time.Duration `mapstructure:"flushFrequency" json:"flush_frequency,omitempty"`
+	FlushBytes      int           `mapstructure:"flushBytes" json:"flush_bytes,omitempty"`
+	RetryMax        int           `mapstructure:"retryMax" json:"retry_max,omitempty"`
+	RetryBackoff    time.Duration `mapstructure:"retryBackoff" json:"retry_backoff,omitempty"`
+}
+
+type KafkaTopic struct {
+	BalanceChange string `mapstructure:"balanceChange" json:"balance_change,omitempty"`
 }
 
 func loadConfig(configfile string) (*viper.Viper, error) {
