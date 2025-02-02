@@ -41,6 +41,8 @@ kafka:
   maxRetry: 3
   retryBackoff: 10s
   refreshFrequency: 10s
+  enableTLS: false
+  enableSASL: false
   brokers:
     - "localhost:9092"
   consumer:
@@ -59,4 +61,4 @@ kafka:
     retryBackoff: 10s
 
 kafkaTopics:
-  - balanceChange: account.balance.change
+  balanceChange: account.balance.change

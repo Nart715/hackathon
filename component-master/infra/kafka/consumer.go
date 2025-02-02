@@ -1,102 +1,94 @@
 package kafka
 
 import (
-	"component-master/util"
 	"context"
-	"fmt"
+	"log/slog"
 	"sync"
-	"time"
 
 	"github.com/IBM/sarama"
 )
 
-type MessageHandler interface {
-	Handle(context.Context, *sarama.ConsumerMessage) error
+type ConsumerHandler struct {
+	ready          chan bool
+	messageHandler func(context.Context, *sarama.ConsumerMessage) error
+	logger         *slog.Logger
+	wg             *sync.WaitGroup
 }
 
-type Consumer struct {
-	group   sarama.ConsumerGroup
-	client  *KafkaClientConfig
-	handler MessageHandler
-	topics  []string
-	wg      sync.WaitGroup
-}
-
-func (c *KafkaClientConfig) NewConsumer(ctx context.Context, groupID string, topics []string, handler MessageHandler) (*Consumer, error) {
-	if groupID == "" {
-		return nil, fmt.Errorf("consumer group ID is required")
-	}
-	if len(topics) == 0 {
-		return nil, fmt.Errorf("at least one topic is required")
-	}
-	if handler == nil {
-		return nil, fmt.Errorf("message handler is required")
-	}
-
-	group, err := sarama.NewConsumerGroup(c.cfg.Brokers, groupID, &c.sarama)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create consumer group: %w", err)
-	}
-
-	consumer := &Consumer{
-		group:   group,
-		client:  c,
-		handler: handler,
-		topics:  topics,
-	}
-
-	return consumer, nil
-}
-
-func (c *Consumer) Start(ctx context.Context) error {
-	c.wg.Add(1)
-	go func() {
-		defer c.wg.Done()
-		for {
-			if err := c.group.Consume(ctx, c.topics, c); err != nil {
-				c.client.logger.Error(util.String("Error from consumer: %s", err.Error()))
-
-				select {
-				case <-ctx.Done():
-					return
-				case <-time.After(c.client.cfg.Consumer.RetryBackoff):
-					continue
-				}
-			}
-
-			if ctx.Err() != nil {
-				return
-			}
-		}
-	}()
-
+func (h *ConsumerHandler) Setup(sarama.ConsumerGroupSession) error {
+	close(h.ready)
 	return nil
 }
 
-func (c *Consumer) Setup(sarama.ConsumerGroupSession) error   { return nil }
-func (c *Consumer) Cleanup(sarama.ConsumerGroupSession) error { return nil }
-func (c *Consumer) ConsumeClaim(session sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
-	for message := range claim.Messages() {
-		start := time.Now()
-		err := c.handler.Handle(session.Context(), message)
-		duration := time.Since(start)
+func (h *ConsumerHandler) Cleanup(sarama.ConsumerGroupSession) error {
+	return nil
+}
 
-		c.client.logger.Info(util.String("Topic: %s", message.Topic))
-		c.client.logger.Info(util.String("Partition: %d", message.Partition))
-		c.client.logger.Info(util.String("Offset: %d", message.Offset))
-		c.client.logger.Info(util.String("Processing time: %v", duration))
-		c.client.logger.Info(util.String("Error: %v", err))
-		if err != nil {
-			c.client.logger.Error("Failed to process message")
+func (h *ConsumerHandler) ConsumeClaim(session sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
+	for message := range claim.Messages() {
+		h.logger.Info("Received message",
+			"topic", message.Topic,
+			"partition", message.Partition,
+			"offset", message.Offset,
+			"key", string(message.Key),
+			"value", string(message.Value))
+
+		if err := h.messageHandler(context.Background(), message); err != nil {
+			h.logger.Error("Failed to process message",
+				"topic", message.Topic,
+				"partition", message.Partition,
+				"offset", message.Offset,
+				"error", err)
 			continue
 		}
+
 		session.MarkMessage(message, "")
 	}
 	return nil
 }
 
-func (c *Consumer) Close() error {
-	err := c.group.Close()
-	c.wg.Wait()
-	return err
+func (k *KafkaClientConfig) Consume(ctx context.Context, topics []string, handler func(context.Context, *sarama.ConsumerMessage) error) error {
+	k.wg.Add(1)
+
+	consumerHandler := &ConsumerHandler{
+		ready:          make(chan bool),
+		messageHandler: handler,
+		logger:         k.logger,
+		wg:             &k.wg,
+	}
+
+	// Start error handler
+	go func() {
+		for err := range k.consumer.Errors() {
+			k.logger.Error("Consumer group error", "error", err)
+		}
+	}()
+
+	go func() {
+		defer k.wg.Done()
+		for {
+			k.logger.Info("Starting consumer group",
+				"topics", topics,
+				"group", k.cfg.Kafka.Consumer.GroupId)
+
+			err := k.consumer.Consume(ctx, topics, consumerHandler)
+			if err != nil {
+				k.logger.Error("Consumer group error", "error", err)
+			}
+
+			if ctx.Err() != nil {
+				k.logger.Info("Context cancelled, stopping consumer")
+				return
+			}
+
+			consumerHandler.ready = make(chan bool)
+		}
+	}()
+
+	<-consumerHandler.ready
+	k.logger.Info("Consumer started successfully",
+		"topics", topics,
+		"group", k.cfg.Kafka.Consumer.GroupId)
+
+	return nil
 }

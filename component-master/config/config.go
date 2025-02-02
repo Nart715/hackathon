@@ -12,11 +12,11 @@ import (
 )
 
 type Config struct {
-	Server      ServerConfig     `mapstructure:"server" json:"server,omitempty"`
-	Redis       RedisConfig      `mapstructure:"redis" json:"redis,omitempty"`
-	GrpcClient  GrpcConfigClient `mapstructure:"grpcClient" json:"grpc_client,omitempty"`
-	Kafka       KafkaConfig      `mapstructure:"kafka" json:"kafka,omitempty"`
-	KafkaTopics []KafkaTopic     `mapstructure:"kafkaTopics" json:"kafka_topics,omitempty"`
+	Server     ServerConfig     `mapstructure:"server" json:"server,omitempty"`
+	Redis      RedisConfig      `mapstructure:"redis" json:"redis,omitempty"`
+	GrpcClient GrpcConfigClient `mapstructure:"grpcClient" json:"grpc_client,omitempty"`
+	Kafka      KafkaConfig      `mapstructure:"kafka" json:"kafka,omitempty"`
+	KafkaTopic KafkaTopic       `mapstructure:"kafkaTopics" json:"kafka_topics,omitempty"`
 }
 
 type ServerConfig struct {
@@ -63,6 +63,8 @@ type KafkaConfig struct {
 	Brokers          []string       `mapstructure:"brokers" json:"brokers,omitempty"`
 	Consumer         ConsumerConfig `mapstructure:"consumer" json:"consumer,omitempty"`
 	Producer         ProducerConfig `mapstructure:"producer" json:"producer,omitempty"`
+	EnableTLS        bool           `mapstructure:"enableTLS" json:"enable_tls,omitempty"`
+	EnableSASL       bool           `mapstructure:"enableSASL" json:"enable_sasl,omitempty"`
 }
 
 type ConsumerConfig struct {

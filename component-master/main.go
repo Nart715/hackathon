@@ -52,8 +52,8 @@ func depositAccount(i int) {
 
 	transaction_id := idgen.GenID()
 	localRequestCreateUrl := &account.BalanceChangeRequest{
-		Ac:  int64(i),
-		Tx:  transaction_id,
+		Ac:  int32(i),
+		Tx:  int32(transaction_id),
 		Am:  100,
 		Act: 0,
 	}
@@ -86,7 +86,7 @@ func create1000kAccounts(i int) {
 
 	// deep copy to fix goroutine the same time
 	localRequestCreateUrl := &account.CreateAccountRequest{
-		AccountId: int64(i),
+		AccountId: int32(i),
 	}
 
 	dataJson, _ := json.Marshal(localRequestCreateUrl)

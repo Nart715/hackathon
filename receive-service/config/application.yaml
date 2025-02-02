@@ -1,7 +1,7 @@
 server:
   grpc:
     host: localhost
-    port: 8080
+    port: 50051
     enableTLS: false
     correctTimeOut: 30000
 
@@ -32,6 +32,9 @@ kafka:
   maxRetry: 3
   retryBackoff: 10s
   refreshFrequency: 10s
+  requiredAcks: true
+  enableTLS: false
+  enableSASL: false
   brokers:
     - "localhost:9092"
   consumer:
@@ -50,4 +53,4 @@ kafka:
     retryBackoff: 10s
 
 kafkaTopics:
-  - balanceChange: account.balance.change
+  balanceChange: account.balance.change

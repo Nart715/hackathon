@@ -1,103 +1,116 @@
 package kafka
 
 import (
-	"component-master/config"
+	mconfig "component-master/config"
+	"component-master/util"
 	"context"
+	"crypto/tls"
 	"fmt"
 	"log/slog"
+	"sync"
 	"time"
 
 	"github.com/IBM/sarama"
 )
 
 type KafkaClientConfig struct {
-	cfg    *config.KafkaConfig
-	sarama sarama.Config
-	logger *slog.Logger
+	cfg      *mconfig.Config
+	sarama   sarama.Config
+	producer sarama.SyncProducer
+	consumer sarama.ConsumerGroup
+	logger   *slog.Logger
+	wg       sync.WaitGroup
 }
 
-type Admin struct {
-	admin  sarama.ClusterAdmin
-	client *KafkaClientConfig
+func (r *KafkaClientConfig) GetConfig() *mconfig.Config {
+	return r.cfg
 }
 
-func NewKafkaClient(cfg *config.KafkaConfig) (*KafkaClientConfig, error) {
+func NewKafkaClient(cfg *mconfig.Config) (*KafkaClientConfig, error) {
+	config := sarama.NewConfig()
 
-	kafkaConfig := sarama.NewConfig()
-	kafkaConfig.Version = sarama.V2_8_0_0
-	kafkaConfig.ClientID = cfg.ClientId
+	config.Version = sarama.V2_8_0_0 // Use appropriate version for your Kafka cluster
 
-	// Producer configurations
-	kafkaConfig.Producer.RequiredAcks = sarama.WaitForAll
-	kafkaConfig.Producer.Compression = sarama.CompressionSnappy
-	kafkaConfig.Producer.Retry.Max = cfg.Producer.RetryMax
-	kafkaConfig.Producer.Retry.Backoff = cfg.Producer.RetryBackoff
-	kafkaConfig.Producer.Return.Successes = true
-	kafkaConfig.Producer.Return.Errors = true
-	kafkaConfig.Producer.MaxMessageBytes = cfg.Producer.MaxMessageBytes
+	config.Producer.RequiredAcks = 1
+	config.Producer.Retry.Max = cfg.Kafka.MaxRetry
+	config.Producer.Retry.Backoff = cfg.Kafka.RetryBackoff
+	config.Producer.Return.Successes = true
+	config.Producer.Return.Errors = true
 
-	// Consumer configurations
-	kafkaConfig.Consumer.Group.Rebalance.Strategy = sarama.NewBalanceStrategyRoundRobin()
-	kafkaConfig.Consumer.Offsets.Initial = sarama.OffsetOldest
-	kafkaConfig.Consumer.Offsets.AutoCommit.Enable = true
-	kafkaConfig.Consumer.Offsets.AutoCommit.Interval = time.Second
-	kafkaConfig.Consumer.Group.Session.Timeout = time.Second * 30
-	kafkaConfig.Consumer.MaxProcessingTime = cfg.Consumer.MaxProcessingTime
-	kafkaConfig.Consumer.Fetch.Min = cfg.Consumer.FetchMin
-	kafkaConfig.Consumer.Fetch.Max = cfg.Consumer.FetchMax
+	config.Consumer.Group.Rebalance.Strategy = sarama.NewBalanceStrategyRoundRobin()
+	config.Consumer.Group.Session.Timeout = time.Second * 20
+	config.Consumer.Group.Heartbeat.Interval = time.Second * 6
+	config.Consumer.Group.Rebalance.Timeout = time.Second * 60
+	config.Consumer.Offsets.Initial = sarama.OffsetOldest
+	config.Consumer.Return.Errors = true
 
-	// Network configurations
-	kafkaConfig.Net.DialTimeout = cfg.DialTimeout
-	kafkaConfig.Net.ReadTimeout = cfg.ReadTimeout
-	kafkaConfig.Net.WriteTimeout = cfg.WriteTimeout
-	kafkaConfig.Net.SASL.Enable = true
-	kafkaConfig.Net.TLS.Enable = true
+	// Client settings
+	config.Net.MaxOpenRequests = 5
+	config.Net.KeepAlive = time.Second * 30
+	config.Net.ReadTimeout = cfg.Kafka.ReadTimeout
+	config.Net.WriteTimeout = cfg.Kafka.WriteTimeout
+	config.Net.SASL.Handshake = true
 
-	// Metadata configurations
-	kafkaConfig.Metadata.Retry.Max = cfg.MaxRetry
-	kafkaConfig.Metadata.Retry.Backoff = cfg.RetryBackoff
-	kafkaConfig.Metadata.RefreshFrequency = cfg.RefreshFrequency
-	kafkaConfig.Metadata.Full = true
+	// Debug
+	config.ClientID = "your-client-id" // Set a meaningful client ID
+
+	if cfg.Kafka.EnableTLS {
+		config.Net.TLS.Enable = true
+		config.Net.TLS.Config = &tls.Config{
+			MinVersion: tls.VersionTLS12,
+		}
+	}
+
+	if cfg.Kafka.EnableSASL {
+		config.Net.SASL.Enable = true
+		config.Net.SASL.User = "admin"
+		config.Net.SASL.Password = "admin"
+		config.Net.SASL.Mechanism = sarama.SASLTypePlaintext
+	}
+
+	// Validate the config
+	if err := config.Validate(); err != nil {
+		return nil, fmt.Errorf("invalid config: %w", err)
+	}
+
+	// Create producer
+	producer, err := sarama.NewSyncProducer(cfg.Kafka.Brokers, config)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create producer: %w", err)
+	}
+
+	// Create consumer group
+	consumer, err := sarama.NewConsumerGroup(cfg.Kafka.Brokers, cfg.Kafka.Consumer.GroupId, config)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create consumer group: %w", err)
+	}
 
 	return &KafkaClientConfig{
-		cfg:    cfg,
-		sarama: *kafkaConfig,
-		logger: slog.Default(),
+		producer: producer,
+		consumer: consumer,
+		cfg:      cfg,
+		sarama:   *config,
+		logger:   slog.Default(),
 	}, nil
 }
 
-func (c *KafkaClientConfig) NewAdmin() (*Admin, error) {
-	admin, err := sarama.NewClusterAdmin(c.cfg.Brokers, &c.sarama)
+func (k *KafkaClientConfig) Produce(ctx context.Context, topic string, key, value []byte) error {
+	msg := &sarama.ProducerMessage{
+		Topic: topic,
+		Key:   sarama.ByteEncoder(key),
+		Value: sarama.ByteEncoder(value),
+	}
+
+	partition, offset, err := k.producer.SendMessage(msg)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create cluster admin: %w", err)
+		return fmt.Errorf("failed to send message: %w", err)
 	}
 
-	return &Admin{
-		admin:  admin,
-		client: c,
-	}, nil
-}
-
-func (a *Admin) CreateTopic(ctx context.Context, topic string, numPartitions int32, replicationFactor int16) error {
-	topicDetail := &sarama.TopicDetail{
-		NumPartitions:     numPartitions,
-		ReplicationFactor: replicationFactor,
-		ConfigEntries: map[string]*string{
-			"cleanup.policy":      stringPtr("delete"),
-			"retention.ms":        stringPtr("604800000"), // 7 days
-			"max.message.bytes":   stringPtr("1048576"),   // 1MB
-			"min.insync.replicas": stringPtr("2"),
-		},
-	}
-
-	err := a.admin.CreateTopic(topic, topicDetail, false)
-	if err != nil {
-		return fmt.Errorf("failed to create topic: %w", err)
-	}
-
+	k.logger.Info(util.String("Message sent to partition %d at offset %d\n", partition, offset))
 	return nil
 }
 
-func stringPtr(s string) *string {
-	return &s
+func (k *KafkaClientConfig) Close() error {
+	k.wg.Wait()
+	return k.consumer.Close()
 }
