@@ -49,6 +49,7 @@ type RedisConfig struct {
 	MaxRedirects  int           `mapstructure:"maxRedirects" json:"max_redirects,omitempty"`
 	PoolSize      int           `mapstructure:"poolSize" json:"pool_size,omitempty"`
 	MinIdleConns  int           `mapstructure:"minIdleConns" json:"min_idle_conns,omitempty"`
+	Channel       string        `mapstructure:"channel" json:"channel,omitempty"`
 	Clusters      []string      `mapstructure:"clusters" json:"clusters,omitempty"`
 }
 

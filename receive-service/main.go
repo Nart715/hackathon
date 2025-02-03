@@ -72,7 +72,7 @@ func initServices(conf *mconfig.Config, kafkaClient *kafka.KafkaClientConfig) (p
 	}
 
 	slog.Info(fmt.Sprintf("redis: %v", redis != nil))
-	redisRepository := repository.NewRedisRepository(redis)
+	redisRepository := repository.NewRedisRepository(redis, conf.Redis.Channel)
 	accountBiz := biz.NewAccountBiz(redisRepository)
 	accountService := service.NewAccountService(accountBiz, kafkaClient)
 	return accountService, accountBiz

@@ -19,9 +19,11 @@ message CreateAccountResponse {
 }
 
 message AccountData {
-  int32 accountId = 1;
-  int32 balance = 2;
-  int64 updatedAt = 4;
+  int32 ac  = 1;
+  int32 bc  = 2;
+  int32 tx  = 3;
+  int32 itx = 4;
+  int64 up  = 5;
 }
 
 message DepositAccountRequest {
@@ -33,15 +35,6 @@ message DepositAccountResponse {
   int32 code = 1;
   string message = 2;
   AccountData data = 3;
-}
-
-enum FIELD_NAME {
-  FIELD_MARK = 0;
-  FIELD_NAME_ACCOUNT_ID = 1;
-  FIELD_NAME_AMOUNT = 2;
-  FIELD_NAME_ACTION = 3;
-  FIELD_NAME_TRANSACTION_ID = 4;
-  FIELD_NAME_CREATED_AT = 5;
 }
 
 message BalanceChangeRequest {
@@ -56,6 +49,7 @@ message BalanceChangeResponse {
   string message = 2;
   AccountData data = 3;
  }
+
 
 service AccountService {
   rpc CreateAccount(CreateAccountRequest) returns (CreateAccountResponse);

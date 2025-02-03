@@ -4,7 +4,9 @@ import (
 	"component-master/config"
 	"context"
 	"fmt"
+	"log"
 	"log/slog"
+	"time"
 
 	"github.com/redis/go-redis/v9"
 )
@@ -27,8 +29,14 @@ func NewInitRedisClient(rd *config.RedisConfig) (*RedisClient, error) {
 		ReadTimeout:   rd.ReadTimeout,
 		WriteTimeout:  rd.WriteTimeout,
 
-		MinIdleConns: rd.MinIdleConns,
-		PoolSize:     rd.PoolSize,
+		MinRetryBackoff: time.Millisecond * 100,
+		MaxRetryBackoff: time.Second * 2,
+		MinIdleConns:    rd.MinIdleConns,
+		PoolSize:        rd.PoolSize,
+		OnConnect: func(ctx context.Context, cn *redis.Conn) error {
+			log.Printf("Connected to Redis node: %s", cn.String())
+			return nil
+		},
 	}
 
 	client := redis.NewClusterClient(&redisClusterOps)

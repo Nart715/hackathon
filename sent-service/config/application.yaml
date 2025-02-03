@@ -9,3 +9,23 @@ grpcClient:
   port: 50051
   readTimeOut: 120s
   writeTimeOut: 120s
+
+redis:
+  db: 0
+  maxIdle: 1024
+  dialTimeout: 10s
+  readTimeout: 10s
+  writeTimeout: 10s
+  readOnly: true
+  routeRandomly: true
+  maxRedirects: 6
+  poolSize: 100
+  minIdleConns: 6
+  channel: account-balance-change
+  clusters:
+    - "localhost:7001"
+    - "localhost:7002"
+    - "localhost:7003"
+    - "localhost:7004"
+    - "localhost:7005"
+    - "localhost:7006"

@@ -3,10 +3,12 @@ package repository
 import (
 	"component-master/infra/redis"
 	proto "component-master/proto/account"
+	"component-master/util"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"log/slog"
 	"sync"
 	"sync/atomic"
@@ -32,10 +34,11 @@ var (
 	BalanceField   = "2"
 	UpdatedAtField = "3"
 
-	TranactionIdField = "2"
-	AmountField       = "3"
-	ActionField       = "4"
-	CreatedAtField    = "5"
+	TranactionIdField         = "2"
+	InternalTranactionIdField = "2_1"
+	AmountField               = "3"
+	ActionField               = "4"
+	CreatedAtField            = "5"
 
 	TransactionSetKeyValidate = "tx:validate"
 
@@ -122,6 +125,7 @@ var (
         local sequence = timestamp * 10000 + (seq % 10000)
         return sequence
     `
+	RedisPubSubChannel = "account-balance-change"
 )
 
 type SafeCounter struct {
@@ -150,11 +154,15 @@ func tryLock(m *SafeCounter, timeout time.Duration) bool {
 	}
 }
 
+type messageProcess func(string, RedisRepository)
 type RedisRepository interface {
 	GetRedis() *redisv9.ClusterClient
 	CreateAccount(ctx context.Context, req *proto.CreateAccountRequest) (*proto.CreateAccountResponse, error)
 	BalanceChange(ctx context.Context, req *proto.BalanceChangeRequest) (*proto.BalanceChangeResponse, error)
 	GenerateTransactionSeq(ctx context.Context) (int64, error)
+	PublishMessage(context.Context, string) error
+	SubscribeMessage(context.Context, messageProcess) error
+	Close() error
 }
 
 type redisRepository struct {
@@ -164,18 +172,140 @@ type redisRepository struct {
 	pipeline     redisv9.Pipeliner
 	opCounter    atomic.Int64
 	lastExecTime atomic.Int64
+	channel      string
+	mutex        sync.RWMutex
+	done         chan struct{}
+	pubsub       *redisv9.PubSub
+	isConnected  bool
 }
 
-func NewRedisRepository(rd *redis.RedisClient) RedisRepository {
+type Message struct {
+	Channel string
+	Payload string
+}
+
+func NewRedisRepository(rd *redis.RedisClient, channel string) RedisRepository {
 	safeCounter = &SafeCounter{count: 0}
 	repo := &redisRepository{
 		rd:         rd,
 		pipeline:   rd.GetRd().Pipeline(),
 		pipeLineTx: rd.GetRd().TxPipeline(),
+		channel:    channel,
 	}
 	go repo.pipelineFlusher()
 	return repo
 }
+
+func (r *redisRepository) PublishMessage(ctx context.Context, message string) error {
+	return r.pipeline.Publish(ctx, r.channel, message).Err()
+}
+
+func (c *redisRepository) SubscribeMessage(ctx context.Context, fn messageProcess) error {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
+	c.pubsub = c.GetRedis().Subscribe(ctx, c.channel)
+
+	go c.handleMessages(ctx, fn)
+	go c.monitorConnection(ctx)
+
+	return nil
+}
+
+func (c *redisRepository) monitorConnection(ctx context.Context) {
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-c.done:
+			return
+		case <-ticker.C:
+			if err := c.GetRedis().Ping(ctx).Err(); err != nil {
+				log.Printf("Connection check failed: %v", err)
+				c.handleDisconnect(ctx)
+			}
+		}
+	}
+}
+
+func (c *redisRepository) handleMessages(ctx context.Context, fn messageProcess) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-c.done:
+			return
+		default:
+			msg, err := c.pubsub.Receive(ctx)
+			if err != nil {
+				log.Printf("Error receiving message: %v", err)
+				c.handleDisconnect(ctx)
+				continue
+			}
+
+			switch m := msg.(type) {
+			case *redisv9.Message:
+				// Process message
+				fn(m.Payload, c)
+			case *redisv9.Subscription:
+				log.Printf("Subscription message: %s: %s", m.Channel, m.Kind)
+			case error:
+				log.Printf("Error in subscription: %v", m)
+				c.handleDisconnect(ctx)
+			}
+		}
+	}
+}
+
+func (c *redisRepository) handleDisconnect(ctx context.Context) {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
+	if !c.isConnected {
+		return
+	}
+
+	c.isConnected = false
+	log.Printf("Handling disconnect, attempting to reconnect...")
+
+	// Close existing pubsub
+	if c.pubsub != nil {
+		_ = c.pubsub.Close()
+	}
+
+	// Attempt to reconnect with exponential backoff
+	backoff := time.Second
+	maxBackoff := time.Second * 30
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			// Create new pubsub client
+			c.pubsub = c.GetRedis().Subscribe(ctx, c.channel)
+
+			// Test connection
+			if _, err := c.pubsub.Receive(ctx); err == nil {
+				c.isConnected = true
+				log.Printf("Successfully reconnected to Redis cluster")
+				return
+			}
+
+			log.Printf("Reconnection attempt failed, retrying in %v", backoff)
+			time.Sleep(backoff)
+
+			// Increase backoff time
+			backoff *= 2
+			if backoff > maxBackoff {
+				backoff = maxBackoff
+			}
+		}
+	}
+}
+
 func (r *redisRepository) GetRedis() *redisv9.ClusterClient {
 	return r.rd.GetRd()
 }
@@ -209,9 +339,9 @@ func (r *redisRepository) CreateAccount(ctx context.Context, req *proto.CreateAc
 	}
 
 	accountData := proto.AccountData{
-		AccountId: account[AccountIdField].(int32),
-		Balance:   account[BalanceField].(int32),
-		UpdatedAt: account[UpdatedAtField].(int64),
+		Ac: account[AccountIdField].(int32),
+		Bc: account[BalanceField].(int32),
+		Up: account[UpdatedAtField].(int64),
 	}
 	return &proto.CreateAccountResponse{Code: 0, Message: "Successs", Data: &accountData}, nil
 }
@@ -276,11 +406,12 @@ func (r *redisRepository) BalanceChange(ctx context.Context, input *proto.Balanc
 	transactionId := input.Tx
 
 	mapRequestTransaction := map[string]interface{}{
-		AccountIdField:    accountId,
-		TranactionIdField: transactionId,
-		AmountField:       amount,
-		ActionField:       int32(input.Act),
-		CreatedAtField:    time.Now().UnixMicro(),
+		AccountIdField:            accountId,
+		TranactionIdField:         transactionId,
+		InternalTranactionIdField: transactionId,
+		AmountField:               amount,
+		ActionField:               int32(input.Act),
+		CreatedAtField:            time.Now().UnixMicro(),
 	}
 	// Marshal the request to JSON
 	jsonData, err := json.Marshal(mapRequestTransaction)
@@ -313,13 +444,10 @@ func (r *redisRepository) BalanceChange(ctx context.Context, input *proto.Balanc
 
 	tx := r.pipeline.TxPipeline()
 
+	now := time.Now().UnixMicro()
 	script := mapActionScript[input.Act]
 	amountBalance := MAP_BALANCE_CHANGE[input.Act] * amount
-	result := tx.Eval(ctx, script, []string{accountKey},
-		BalanceField,
-		amountBalance,
-		UpdatedAtField,
-		time.Now().UnixMicro())
+	result := tx.Eval(ctx, script, []string{accountKey}, BalanceField, amountBalance, UpdatedAtField, now)
 
 	_, err = tx.Exec(ctx)
 	if err != nil {
@@ -337,11 +465,22 @@ func (r *redisRepository) BalanceChange(ctx context.Context, input *proto.Balanc
 		return nil, errors.New("balance is not enough")
 	}
 
-	slog.Info("Balance updated successfully",
-		"accountId", accountId,
-		"amount", amount)
-
+	r.buildMessagePublish(accountId, transactionId, amount, now)
 	return &proto.BalanceChangeResponse{Code: 0, Message: "Success"}, nil
+}
+
+func (r *redisRepository) buildMessagePublish(accountId int32, transactionId int32, amount int32, t int64) {
+	slog.Info(util.String("publish message to redis channel %d, %s", transactionId, r.channel))
+	msg := &proto.AccountData{
+		Ac:  accountId,
+		Tx:  transactionId,
+		Itx: transactionId,
+		Bc:  amount,
+		Up:  t,
+	}
+	data, _ := json.Marshal(msg)
+	r.PublishMessage(context.Background(), string(data))
+	r.PublishMessage(context.Background(), "{}")
 }
 
 func mapKeyInt64toString(prefix string, key int32) string {
@@ -401,4 +540,16 @@ func (r *redisRepository) GenerateTransactionSeq(ctx context.Context) (int64, er
 	}
 
 	return sequence, nil
+}
+
+func (c *redisRepository) Close() error {
+	if c.pubsub != nil {
+		if err := c.pubsub.Close(); err != nil {
+			return fmt.Errorf("error closing pubsub: %v", err)
+		}
+	}
+	if c.rd != nil {
+		return c.GetRedis().Close()
+	}
+	return nil
 }
