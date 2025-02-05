@@ -4,14 +4,13 @@ import (
 	"component-master/config"
 	grpcClient "component-master/infra/grpc/client"
 	"component-master/infra/http"
-	"component-master/repository"
 	"sent-service/handler"
 	"sent-service/service"
 
 	"github.com/gofiber/fiber/v2"
 )
 
-func InitHttpServer(conf *config.Config, redisRepo repository.RedisRepository) {
+func InitHttpServer(conf *config.Config) {
 	httpClient := http.HttpServer{
 		AppName: "sent service",
 		Conf:    &conf.Server.Http,
@@ -20,13 +19,13 @@ func InitHttpServer(conf *config.Config, redisRepo repository.RedisRepository) {
 	httpClient.InitHttpServer()
 
 	v1 := httpClient.App().Group("/api/v1/player")
-	SetupRoute(v1, conf, redisRepo)
+	SetupRoute(v1, conf)
 	httpClient.Start()
 }
 
-func SetupRoute(r fiber.Router, conf *config.Config, redis repository.RedisRepository) {
+func SetupRoute(r fiber.Router, conf *config.Config) {
 	accountClient := grpcClient.NewAccountClient(conf.GrpcClient)
-	accountService := service.NewAccountService(accountClient, redis)
+	accountService := service.NewAccountService(accountClient)
 	accountHandler := handler.NewAccountHandler(accountService)
 
 	groupCreatedAccount := r.Group("/created-account")
