@@ -346,7 +346,7 @@ func (r *redisRepository) CreateAccount(ctx context.Context, req *proto.CreateAc
 	return &proto.CreateAccountResponse{Code: 0, Message: "Successs", Data: &accountData}, nil
 }
 
-func (r *redisRepository) validateAndRecordTransaction(ctx context.Context, transactionId int32, inputJsonData string) (bool, error) {
+func (r *redisRepository) validateAndRecordTransaction(ctx context.Context, transactionId int64, inputJsonData string) (bool, error) {
 	r.pipelineMu.Lock()
 	defer r.pipelineMu.Unlock()
 
@@ -371,7 +371,7 @@ func (r *redisRepository) validateAndRecordTransaction(ctx context.Context, tran
 	return success == 1, nil
 }
 
-func (r *redisRepository) addTransactionByAccountId(ctx context.Context, accountId int32, transactionId int32, inputJsonData string) (bool, error) {
+func (r *redisRepository) addTransactionByAccountId(ctx context.Context, accountId int32, transactionId int64, inputJsonData string) (bool, error) {
 	r.pipelineMu.Lock()
 	defer r.pipelineMu.Unlock()
 
@@ -469,7 +469,7 @@ func (r *redisRepository) BalanceChange(ctx context.Context, input *proto.Balanc
 	return &proto.BalanceChangeResponse{Code: 0, Message: "Success"}, nil
 }
 
-func (r *redisRepository) buildMessagePublish(accountId int32, transactionId int32, amount int32, t int64) {
+func (r *redisRepository) buildMessagePublish(accountId int32, transactionId int64, amount int32, t int64) {
 	slog.Info(util.String("publish message to redis channel %d, %s", transactionId, r.channel))
 	msg := &proto.AccountData{
 		Ac:  accountId,

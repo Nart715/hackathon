@@ -53,7 +53,7 @@ func depositAccount(i int) {
 	transaction_id := idgen.GenID()
 	localRequestCreateUrl := &account.BalanceChangeRequest{
 		Ac:  int32(i),
-		Tx:  int32(transaction_id),
+		Tx:  int64(transaction_id),
 		Am:  100,
 		Act: 0,
 	}

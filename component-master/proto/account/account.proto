@@ -21,8 +21,8 @@ message CreateAccountResponse {
 message AccountData {
   int32 ac  = 1;
   int32 bc  = 2;
-  int32 tx  = 3;
-  int32 itx = 4;
+  int64 tx  = 3;
+  int64 itx = 4;
   int64 up  = 5;
 }
 
@@ -39,7 +39,7 @@ message DepositAccountResponse {
 
 message BalanceChangeRequest {
   int32 ac = 1;
-  int32 tx = 2;
+  int64 tx = 2;
   int32 am = 3;
   int32 act = 4;
 }
