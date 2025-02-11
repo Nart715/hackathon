@@ -28,10 +28,7 @@ func main() {
 		return
 	}
 
-	redisRepo := InitRedisRepo(conf)
-	defer redisRepo.Close()
-	go InitRedisInfra(conf, redisRepo)
-	route.InitHttpServer(conf, redisRepo)
+	route.InitHttpServer(conf)
 }
 
 func InitRedisRepo(cf *config.Config) repository.RedisRepository {
@@ -42,11 +39,6 @@ func InitRedisRepo(cf *config.Config) repository.RedisRepository {
 	slog.Info(cf.Redis.Channel)
 	redisRepository := repository.NewRedisRepository(redis, cf.Redis.Channel)
 	return redisRepository
-}
-
-func InitRedisInfra(cf *config.Config, redisRepo repository.RedisRepository) {
-	redisRepo.SubscribeMessage(context.Background(), process)
-
 }
 
 func process(message string, redisRepo repository.RedisRepository) {
