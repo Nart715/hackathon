@@ -31,8 +31,6 @@ mysql/*
 vendor/
 vendor/*
 
-redis-7.2.2/
-redis-7.2.2/*
 .env
 
 receiveservicebin
