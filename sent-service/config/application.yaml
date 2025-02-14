@@ -11,7 +11,7 @@ server:
     correctTimeOut: 10000
 
 grpcClient:
-  host: localhost
+  host: 10.89.15.96
   port: 50051
   readTimeOut: 120s
   writeTimeOut: 120s
