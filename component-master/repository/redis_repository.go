@@ -103,10 +103,10 @@ var (
         local jsonData = ARGV[2]      -- JSON data
         local expiry = ARGV[3]        -- expiry time
 
-        -- Check if transaction exists
-        if redis.call('HEXISTS', key, transactionId) == 1 then
-            return 0  -- Transaction already exists
-        end
+      -- Check if transaction exists
+      --  if redis.call('HEXISTS', key, transactionId) == 1 then
+      --      return 0  -- Transaction already exists
+      --  end
 
         -- Add transaction and set expiry
         redis.call('HSET', key, transactionId, jsonData)
@@ -180,6 +180,7 @@ type redisRepository struct {
 	pubsub                *redisv9.PubSub
 	isConnected           bool
 	transactionGrpcClient client.TransactionClient
+	transactionMap        map[int64]bool
 }
 
 type Message struct {
@@ -195,6 +196,7 @@ func NewRedisRepository(rd *redis.RedisClient, txClient client.TransactionClient
 		pipeLineTx:            rd.GetRd().TxPipeline(),
 		channel:               channel,
 		transactionGrpcClient: txClient,
+		transactionMap:        make(map[int64]bool),
 	}
 	go repo.pipelineFlusher()
 	return repo
@@ -350,7 +352,7 @@ func (r *redisRepository) CreateAccount(ctx context.Context, req *proto.CreateAc
 	return &proto.CreateAccountResponse{Code: 0, Message: "Successs", Data: &accountData}, nil
 }
 
-func (r *redisRepository) validateAndRecordTransaction(ctx context.Context, transactionId int64, inputJsonData string) (bool, error) {
+func (r *redisRepository) recordTransaction(ctx context.Context, transactionId int64, inputJsonData string) (bool, error) {
 	r.pipelineMu.Lock()
 	defer r.pipelineMu.Unlock()
 
@@ -409,6 +411,11 @@ func (r *redisRepository) BalanceChange(ctx context.Context, input *proto.Balanc
 	amount := input.Am
 	transactionId := input.Tx
 
+	if r.transactionMap[transactionId] {
+		return nil, errors.New("duplicate transaction")
+	}
+	r.transactionMap[transactionId] = true
+
 	mapRequestTransaction := map[string]interface{}{
 		AccountIdField:            accountId,
 		TranactionIdField:         transactionId,
@@ -425,22 +432,10 @@ func (r *redisRepository) BalanceChange(ctx context.Context, input *proto.Balanc
 
 	inputJsonData := string(jsonData)
 
-	isValid, err := r.validateAndRecordTransaction(ctx, transactionId, inputJsonData)
-	if err != nil {
-		return nil, fmt.Errorf("failed to validate transaction: %w", err)
-	}
-
-	r.addTransactionByAccountId(ctx, accountId, transactionId, inputJsonData)
-
-	if !isValid {
-		slog.Error("duplicate transaction detected",
-			"accountId", accountId,
-			"transactionId", transactionId)
-		return nil, errors.New("duplicate transaction")
-	}
+	go r.recordTransaction(ctx, transactionId, inputJsonData)
+	go r.addTransactionByAccountId(ctx, accountId, transactionId, inputJsonData)
 
 	accountKey := mapKeyInt64toString(AccountSetKeyPrefix, accountId)
-
 	r.pipelineMu.Lock()
 	defer r.pipelineMu.Unlock()
 
