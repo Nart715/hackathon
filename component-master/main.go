@@ -20,8 +20,8 @@ import (
 )
 
 const (
-	totalRequests  = 100000 // 500K RPS target
-	numWorkers     = 800    // Adjust based on system capability
+	totalRequests  = 1000000 // 500K RPS target
+	numWorkers     = 800     // Adjust based on system capability
 	requestTimeout = 2 * time.Second
 	apiURL         = "http://localhost:8081/api/v1/player/balance-change"
 )
