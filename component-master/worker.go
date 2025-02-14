@@ -122,3 +122,40 @@ func executeRandom(snapshot func(i int)) {
 
 func display(i int) {
 }
+
+func workerLoadTest(jobs <-chan int, wg *sync.WaitGroup, counter *uint64, requestFunc func()) {
+	defer wg.Done()
+	for range jobs {
+		requestFunc() // Call function from main.go
+		atomic.AddUint64(counter, 1)
+	}
+}
+
+func loadTest(totalRequests int, numWorkers int, requestFunc func()) {
+	start := time.Now()
+	jobs := make(chan int, totalRequests)
+	var wg sync.WaitGroup
+	var counter uint64
+
+	// Start workers
+	for i := 0; i < numWorkers; i++ {
+		wg.Add(1)
+		go workerLoadTest(jobs, &wg, &counter, requestFunc)
+	}
+
+	// Send jobs to workers
+	for i := 0; i < totalRequests; i++ {
+		jobs <- i
+	}
+	close(jobs)
+
+	// Wait for all workers to complete
+	wg.Wait()
+
+	// Print performance results
+	elapsed := time.Since(start)
+	fmt.Printf("Processed %d requests in %s using %d workers\n",
+		atomic.LoadUint64(&counter), elapsed, numWorkers)
+	fmt.Printf("Achieved %.2f RPS\n",
+		float64(atomic.LoadUint64(&counter))/elapsed.Seconds())
+}

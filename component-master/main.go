@@ -14,7 +14,18 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/valyala/fasthttp"
 )
+
+const (
+	totalRequests  = 100000 // 500K RPS target
+	numWorkers     = 2000   // Adjust based on system capability
+	requestTimeout = 2 * time.Second
+	apiURL         = "http://localhost:8081/api/v1/player/balance-change"
+)
+
+var httpClient = &fasthttp.Client{MaxConnsPerHost: 10000}
 
 var (
 	redisClient *redis.RedisClient
@@ -45,7 +56,8 @@ func init() {
 func main() {
 	execute(create1000kAccounts)
 	execute(depositAccount)
-	// executeRandom(depositAccountRandom)
+	// loadTest(totalRequests, numWorkers, sendRequest)
+	// loadTest(500000, depositAccountRandom)
 }
 
 func depositAccount(i int) {
@@ -163,4 +175,37 @@ func initInfra() {
 	redisClient = rd
 	slog.Info(fmt.Sprintf("REDIS CONNECT: %v", rd != nil))
 
+}
+
+func sendRequest() {
+	rng := rand.New(rand.NewSource(time.Now().UnixNano())) // Unique RNG per request
+	transactionID := idgen.GenID()
+
+	// Generate a randomized request body
+	localRequest := &account.BalanceChangeRequest{
+		Ac:  int32(rng.Intn(100_000) + 1), // Random Account ID
+		Tx:  int64(transactionID),         // Unique transaction ID
+		Am:  1,                            // Amount (fixed at 1 for now)
+		Act: int32(rng.Intn(2)),           // Random action (0 or 1)
+	}
+
+	// Convert to JSON
+	dataJson, _ := json.Marshal(localRequest)
+
+	// Prepare HTTP request
+	req := fasthttp.AcquireRequest()
+	resp := fasthttp.AcquireResponse()
+	defer fasthttp.ReleaseRequest(req)
+	defer fasthttp.ReleaseResponse(resp)
+
+	req.SetRequestURI(apiURL)
+	req.Header.SetMethod("POST")
+	req.Header.Set("Content-Type", "application/json")
+	req.SetBody(dataJson)
+
+	// Send the request
+	err := httpClient.DoTimeout(req, resp, requestTimeout)
+	if err != nil {
+		fmt.Println("Request failed:", err)
+	}
 }
