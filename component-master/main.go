@@ -7,6 +7,7 @@ import (
 	"component-master/shared/idgen"
 	"component-master/util"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io"
 	"log/slog"
@@ -35,6 +36,8 @@ var (
 	bettingUrl       = "http://localhost:8081/api/v1/player/balance-change"
 	requestCreateUrl = &account.CreateAccountRequest{}
 	depositRequest   = &account.BalanceChangeRequest{}
+
+	load_test = "a"
 )
 
 func NewHttpClient() http.Client {
@@ -51,13 +54,19 @@ func NewHttpHeader() http.Header {
 
 func init() {
 	util.LoadEnv()
+	flag.StringVar(&load_test, "load_test", "a", "Load test")
+	flag.Parse()
 }
 
 func main() {
-	// execute(create1000kAccounts)
-	// execute(depositAccount)
-	loadTest(totalRequests, numWorkers, sendRequest)
-	// loadTest(500000, depositAccountRandom)
+	if load_test == "a" {
+		execute(create1000kAccounts)
+		execute(depositAccount)
+	} else {
+		fmt.Println("INTERNAL >> ", "bbbb")
+		loadTest(totalRequests, numWorkers, sendRequest)
+		// loadTest(500000, depositAccountRandom)
+	}
 }
 
 func depositAccount(i int) {

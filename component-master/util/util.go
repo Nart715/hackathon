@@ -15,7 +15,7 @@ import (
 
 const (
 	letters        = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-	ContextTimeout = 2 * time.Millisecond
+	ContextTimeout = 120 * time.Millisecond
 )
 
 func LoadEnv() {
