@@ -55,3 +55,9 @@ kafka:
 
 kafkaTopics:
   balanceChange: account.balance.change
+
+grpcClient:
+  host: localhost
+  port: 50052
+  readTimeOut: 120s
+  writeTimeOut: 120s

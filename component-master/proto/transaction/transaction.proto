@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+package transaction;
+option go_package ="proto/transaction";
+
+
+
+message TransactionUpdate{
+  int32 ac = 1;
+  int64 tx = 2;
+  int64 bab = 3;
+  int64 change = 4;
+  int64 baf = 5;
+  int32 type = 6;
+  string status = 7;
+  int64 itx = 8;
+}
+
+message Empty {
+
+}
+
+service TransactionService {
+  rpc UpdateTransaction(TransactionUpdate) returns (Empty);
+}

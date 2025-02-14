@@ -106,7 +106,7 @@ func (k *KafkaClientConfig) Produce(ctx context.Context, topic string, key, valu
 		return fmt.Errorf("failed to send message: %w", err)
 	}
 
-	k.logger.Info(util.String("Message sent to partition %d at offset %d\n", partition, offset))
+	k.logger.Info(util.StringPattern("Message sent to partition %d at offset %d\n", partition, offset))
 	return nil
 }
 

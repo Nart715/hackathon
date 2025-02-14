@@ -27,3 +27,4 @@ go to component-master/docker
 sh install-redis-cluster.sh start
 ```
 
+### Start kafka service before run receive service

@@ -13,7 +13,7 @@
 				"header": [],
 				"body": {
 					"mode": "raw",
-					"raw": "{\n    \"accountId\": 1\n}",
+					"raw": "{\n    \"accountId\": 99\n}",
 					"options": {
 						"raw": {
 							"language": "json"
@@ -43,7 +43,7 @@
 				"header": [],
 				"body": {
 					"mode": "raw",
-					"raw": "{\n    \"accountId\": 1,\n    \"transactionId\": 1,\n    \"amount\": 100,\n    \"action\": 0 // 1 credit, 0 deposit\n}",
+					"raw": "{\n    \"ac\": 99, // account id\n    \"tx\": 9322, // transaction id\n    \"am\": 100, // amount\n    \"act\": 0 // 0 credit, 1 debit\n}",
 					"options": {
 						"raw": {
 							"language": "json"

@@ -1,5 +1,11 @@
 server:
+  grpc:
+    host: localhost
+    port: 50052
+    enableTLS: false
+    correctTimeOut: 30000
   http:
+    host: localhost
     port: 8081
     enableTLS: false
     correctTimeOut: 10000

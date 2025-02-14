@@ -3,6 +3,7 @@ package main
 import (
 	mconfig "component-master/config"
 	mhandler "component-master/handler"
+	grpcClient "component-master/infra/grpc/client"
 	grpcServer "component-master/infra/grpc/server"
 	"component-master/infra/kafka"
 	infraRedis "component-master/infra/redis"
@@ -55,6 +56,7 @@ func StartBettingGrpcServer(conf *mconfig.Config) {
 	kafkaClient, err := kafka.NewKafkaClient(conf)
 	if err != nil {
 		slog.Error("Failed to create Kafka client", "error", err)
+		return
 	}
 
 	accountService, accountBiz := initServices(conf, kafkaClient)
@@ -72,7 +74,8 @@ func initServices(conf *mconfig.Config, kafkaClient *kafka.KafkaClientConfig) (p
 	}
 
 	slog.Info(fmt.Sprintf("redis: %v", redis != nil))
-	redisRepository := repository.NewRedisRepository(redis, conf.Redis.Channel)
+	transactionGrpcClient := grpcClient.NewTransactionClient(conf.GrpcClient)
+	redisRepository := repository.NewRedisRepository(redis, transactionGrpcClient, conf.Redis.Channel)
 	accountBiz := biz.NewAccountBiz(redisRepository)
 	accountService := service.NewAccountService(accountBiz, kafkaClient)
 	return accountService, accountBiz

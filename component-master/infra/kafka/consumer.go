@@ -2,6 +2,7 @@ package kafka
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"sync"
 
@@ -48,6 +49,11 @@ func (h *ConsumerHandler) ConsumeClaim(session sarama.ConsumerGroupSession, clai
 }
 
 func (k *KafkaClientConfig) Consume(ctx context.Context, topics []string, handler func(context.Context, *sarama.ConsumerMessage) error) error {
+	if k == nil {
+		slog.Error("Kafka client is null")
+		return errors.New("kafka client is null, must be init or kafka service need to be startup")
+	}
+
 	k.wg.Add(1)
 
 	consumerHandler := &ConsumerHandler{

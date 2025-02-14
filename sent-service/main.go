@@ -2,16 +2,14 @@ package main
 
 import (
 	"component-master/config"
-	infraRedis "component-master/infra/redis"
-	proto "component-master/proto/account"
-	"component-master/repository"
+	grpcServer "component-master/infra/grpc/server"
 	"component-master/util"
-	"context"
-	"encoding/json"
 	"fmt"
+	"log"
 	"log/slog"
+	"sent-service/filewriter"
 	"sent-service/route"
-	"strconv"
+	"sent-service/service"
 	"time"
 )
 
@@ -28,35 +26,26 @@ func main() {
 		return
 	}
 
-	route.InitHttpServer(conf)
-}
-
-func InitRedisRepo(cf *config.Config) repository.RedisRepository {
-	redis, err := infraRedis.NewInitRedisClient(&cf.Redis)
+	fw, err := filewriter.NewFileWriter("./log/transaction.log",
+		filewriter.WithBufferSize(8192),           // 8KB buffer
+		filewriter.WithFlushInterval(time.Second), // Flush every second
+	)
 	if err != nil {
-		slog.Error(fmt.Sprintf("failed to init redis, %v", err))
+		log.Fatalf("Failed to create file writer: %v", err)
 	}
-	slog.Info(cf.Redis.Channel)
-	redisRepository := repository.NewRedisRepository(redis, cf.Redis.Channel)
-	return redisRepository
+	defer fw.Close()
+
+	go StartGrpcServer(conf, fw)
+	StartHttpServer(conf, fw)
 }
 
-func process(message string, redisRepo repository.RedisRepository) {
-	slog.Info("Message receive " + message)
-	clazzz := &proto.AccountData{}
-	if err := json.Unmarshal([]byte(message), clazzz); err != nil || clazzz.GetTx() <= 0 {
-		return
-	}
-	key := strconv.Itoa(int(clazzz.GetTx()))
-	data := redisRepo.GetRedis().Get(context.Background(), key).Val()
-	if empty(data) {
-		slog.Warn("Transaction not valid " + key)
-		return
-	}
-	slog.Info("Update redis by key " + key)
-	redisRepo.GetRedis().Set(context.Background(), key, "success", time.Duration(24)*time.Hour)
+func StartHttpServer(cfg *config.Config, fw *filewriter.FileWriter) {
+	route.InitHttpServer(cfg, fw)
 }
 
-func empty(data string) bool {
-	return len(data) <= 0
+func StartGrpcServer(cfg *config.Config, fw *filewriter.FileWriter) {
+	transactionService := service.NewTransactionService(fw)
+	transactionGrpcServer := grpcServer.InitTransactionGrpcServer(cfg.Server.Grpc, transactionService)
+	slog.Info("start send grpc server")
+	transactionGrpcServer.Start()
 }

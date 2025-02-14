@@ -1,8 +1,10 @@
 package repository
 
 import (
+	"component-master/infra/grpc/client"
 	"component-master/infra/redis"
 	proto "component-master/proto/account"
+	"component-master/proto/transaction"
 	"component-master/util"
 	"context"
 	"encoding/json"
@@ -166,17 +168,18 @@ type RedisRepository interface {
 }
 
 type redisRepository struct {
-	rd           *redis.RedisClient
-	pipeLineTx   redisv9.Pipeliner
-	pipelineMu   sync.Mutex
-	pipeline     redisv9.Pipeliner
-	opCounter    atomic.Int64
-	lastExecTime atomic.Int64
-	channel      string
-	mutex        sync.RWMutex
-	done         chan struct{}
-	pubsub       *redisv9.PubSub
-	isConnected  bool
+	rd                    *redis.RedisClient
+	pipeLineTx            redisv9.Pipeliner
+	pipelineMu            sync.Mutex
+	pipeline              redisv9.Pipeliner
+	opCounter             atomic.Int64
+	lastExecTime          atomic.Int64
+	channel               string
+	mutex                 sync.RWMutex
+	done                  chan struct{}
+	pubsub                *redisv9.PubSub
+	isConnected           bool
+	transactionGrpcClient client.TransactionClient
 }
 
 type Message struct {
@@ -184,13 +187,14 @@ type Message struct {
 	Payload string
 }
 
-func NewRedisRepository(rd *redis.RedisClient, channel string) RedisRepository {
+func NewRedisRepository(rd *redis.RedisClient, txClient client.TransactionClient, channel string) RedisRepository {
 	safeCounter = &SafeCounter{count: 0}
 	repo := &redisRepository{
-		rd:         rd,
-		pipeline:   rd.GetRd().Pipeline(),
-		pipeLineTx: rd.GetRd().TxPipeline(),
-		channel:    channel,
+		rd:                    rd,
+		pipeline:              rd.GetRd().Pipeline(),
+		pipeLineTx:            rd.GetRd().TxPipeline(),
+		channel:               channel,
+		transactionGrpcClient: txClient,
 	}
 	go repo.pipelineFlusher()
 	return repo
@@ -419,8 +423,6 @@ func (r *redisRepository) BalanceChange(ctx context.Context, input *proto.Balanc
 		return nil, fmt.Errorf("failed to marshal transaction data: %w", err)
 	}
 
-	fmt.Println("JsonData: ", string(jsonData))
-
 	inputJsonData := string(jsonData)
 
 	isValid, err := r.validateAndRecordTransaction(ctx, transactionId, inputJsonData)
@@ -465,12 +467,37 @@ func (r *redisRepository) BalanceChange(ctx context.Context, input *proto.Balanc
 		return nil, errors.New("balance is not enough")
 	}
 
-	r.buildMessagePublish(accountId, transactionId, amount, now)
+	go r.updatebackTransaction(context.Background(), input)
 	return &proto.BalanceChangeResponse{Code: 0, Message: "Success"}, nil
 }
 
+func (r *redisRepository) updatebackTransaction(ctx context.Context, input *proto.BalanceChangeRequest) {
+	r.pipelineMu.Lock()
+	defer r.pipelineMu.Unlock()
+
+	tx := r.pipeline.TxPipeline()
+
+	accountKey := mapKeyInt64toString(AccountSetKeyPrefix, input.Ac)
+	balance, _ := tx.HGet(ctx, accountKey, BalanceField).Result()
+	balanceNum := util.StringToInt64(balance)
+
+	change := int64(MAP_BALANCE_CHANGE[input.Act]) * int64(input.Am)
+	balanceBefore := balanceNum - change
+	update := &transaction.TransactionUpdate{
+		Ac:     input.Ac,
+		Tx:     input.Tx,
+		Itx:    input.Tx,
+		Bab:    balanceBefore,
+		Change: int64(input.Am),
+		Baf:    balanceNum,
+		Type:   input.Act,
+		Status: "SUCCESS",
+	}
+	r.transactionGrpcClient.UpdateTransaction(context.Background(), update)
+}
+
 func (r *redisRepository) buildMessagePublish(accountId int32, transactionId int64, amount int32, t int64) {
-	slog.Info(util.String("publish message to redis channel %d, %s", transactionId, r.channel))
+	slog.Info(util.StringPattern("publish message to redis channel %d, %s", transactionId, r.channel))
 	msg := &proto.AccountData{
 		Ac:  accountId,
 		Tx:  transactionId,

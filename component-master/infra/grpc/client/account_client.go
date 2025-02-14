@@ -22,33 +22,30 @@ type AccountClient interface {
 
 type accountClient struct {
 	client rpc.AccountServiceClient
+	conf   config.GrpcConfigClient
 }
 
 func NewAccountClient(conf config.GrpcConfigClient) AccountClient {
-	if accountGrpcClient == nil {
-		InitAccountGrpcClient(conf)
-	}
-	if accountGrpcClient == nil {
-		slog.Error("bettingGrpcClient is nil")
-		return nil
-	}
+	InitAccountGrpcClient(conf)
 	return accountGrpcClient
 }
 
-func InitAccountGrpcClient(cgf config.GrpcConfigClient) {
+func InitAccountGrpcClient(cfg config.GrpcConfigClient) {
 	doOne.Do(func() {
-		conn, err := InitConnection(cgf)
+		conn, err := InitConnection(cfg)
+
 		if err != nil {
 			slog.Error("InitConnection error", "err", err)
 			return
 		}
-		initConnectionClient(conn)
+		initConnectionClient(conn, cfg)
 	})
 }
 
-func initConnectionClient(conn *grpc.ClientConn) {
+func initConnectionClient(conn *grpc.ClientConn, cfg config.GrpcConfigClient) {
 	accountGrpcClient = &accountClient{
 		client: rpc.NewAccountServiceClient(conn),
+		conf:   cfg,
 	}
 	slog.Info(fmt.Sprintf("InitConnectionClient = %v", accountGrpcClient != nil))
 }
@@ -62,6 +59,10 @@ func (c *accountClient) CreateAccount(ctx context.Context, req *rpc.CreateAccoun
 }
 
 func (c *accountClient) BalanceChange(ctx context.Context, req *rpc.BalanceChangeRequest) (*rpc.BalanceChangeResponse, error) {
+	if accountGrpcClient == nil {
+		InitTransactionGrpcClient(c.conf)
+	}
+
 	if c == nil || c.client == nil {
 		slog.Error("Grpc account client has an error")
 		return nil, errors.New("grpc account client is error")

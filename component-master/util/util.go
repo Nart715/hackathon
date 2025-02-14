@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"log/slog"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -53,6 +54,11 @@ func UUIDFunc() func() string {
 	}
 }
 
+func StringToInt64(str string) int64 {
+	i, _ := strconv.ParseInt(str, 10, 64)
+	return i
+}
+
 func ContextwithTimeout() context.Context {
 	ctx, cancel := context.WithTimeout(context.Background(), ContextTimeout)
 	go cancelContext(ContextTimeout, cancel)
@@ -65,6 +71,10 @@ func cancelContext(timeout time.Duration, cancel context.CancelFunc) {
 	slog.Info("context canceled")
 }
 
-func String(pattern string, args ...any) string {
-	return fmt.Sprintf(pattern, args...)
+func String(i int64) string {
+	return strconv.Itoa(int(i))
+}
+
+func StringPattern(pattern string, arg ...any) string {
+	return fmt.Sprintf(pattern, arg...)
 }
