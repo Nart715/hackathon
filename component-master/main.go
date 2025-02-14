@@ -19,8 +19,8 @@ import (
 )
 
 const (
-	totalRequests  = 100000 // 500K RPS target
-	numWorkers     = 2000   // Adjust based on system capability
+	totalRequests  = 500000 // 500K RPS target
+	numWorkers     = 100    // Adjust based on system capability
 	requestTimeout = 2 * time.Second
 	apiURL         = "http://localhost:8081/api/v1/player/balance-change"
 )
@@ -54,9 +54,9 @@ func init() {
 }
 
 func main() {
-	execute(create1000kAccounts)
-	execute(depositAccount)
-	// loadTest(totalRequests, numWorkers, sendRequest)
+	// execute(create1000kAccounts)
+	// execute(depositAccount)
+	loadTest(totalRequests, numWorkers, sendRequest)
 	// loadTest(500000, depositAccountRandom)
 }
 
@@ -186,11 +186,15 @@ func sendRequest() {
 		Ac:  int32(rng.Intn(100_000) + 1), // Random Account ID
 		Tx:  int64(transactionID),         // Unique transaction ID
 		Am:  1,                            // Amount (fixed at 1 for now)
-		Act: int32(rng.Intn(2)),           // Random action (0 or 1)
+		Act: []int32{1, -1}[rng.Intn(2)],  // ⬅️ Randomly choose between 1 or -1
 	}
 
 	// Convert to JSON
 	dataJson, _ := json.Marshal(localRequest)
+
+	requestString := string(dataJson)
+
+	fmt.Println("INTERNAL >> ", requestString)
 
 	// Prepare HTTP request
 	req := fasthttp.AcquireRequest()

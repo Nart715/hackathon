@@ -2,7 +2,6 @@ package idgen
 
 import (
 	"fmt"
-	"log/slog"
 	"sync"
 	"time"
 )
@@ -63,7 +62,7 @@ func (sf *Snowflake) Generate() int64 {
 	id := ((now - epoch) << timeShift) | (sf.nodeID << nodeShift) | sf.sequence
 
 	// Add logging to check the generated ID
-	slog.Info("Generated ID", "node_id", sf.nodeID, "timestamp", now, "sequence", sf.sequence, "generated_id", id)
+	// slog.Info("Generated ID", "node_id", sf.nodeID, "timestamp", now, "sequence", sf.sequence, "generated_id", id)
 
 	return id
 }
