@@ -10,8 +10,10 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/keepalive"
 )
 
 type GrpcServer struct {
@@ -54,8 +56,17 @@ func (r *GrpcServer) InitGrpcServer() {
 	}
 	r.address = fmt.Sprintf(":%d", r.conf.Port)
 	opts := []grpc.ServerOption{
-		//	grpc.ConnectionTimeout(time.Duration(r.conf.ConnectTimeOut) * time.Millisecond), // set connection timeout
-		// 	grpc.ChainUnaryInterceptor(serverInterceptor()),
+		grpc.MaxConcurrentStreams(1000), // Tăng số lượng request đồng thời
+		grpc.KeepaliveParams(keepalive.ServerParameters{
+			MaxConnectionIdle:     10 * time.Minute, // Giữ kết nối lâu hơn
+			Timeout:               20 * time.Second, // Tăng timeout để tránh bị ngắt
+			MaxConnectionAgeGrace: 5 * time.Minute,
+		}),
+		grpc.KeepaliveEnforcementPolicy(keepalive.EnforcementPolicy{
+			MinTime:             5 * time.Second, // Khoảng cách tối thiểu giữa hai keepalive
+			PermitWithoutStream: true,
+		}),
+		grpc.ConnectionTimeout(10 * time.Second), // Tăng timeout để tránh disconnect sớm
 	}
 	r.server = grpc.NewServer(opts...)
 }
