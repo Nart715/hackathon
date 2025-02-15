@@ -21,9 +21,6 @@ func InitHttpServer(conf *config.Config, fw *filewriter.FileWriter) {
 
 	accountClient := grpcClient.NewAccountClient(conf.GrpcClient)
 	accountService := service.NewAccountService(accountClient, fw, conf.Worker)
-	accountService.Start()
-	defer accountService.Stop()
-
 	accountHandler := handler.NewAccountHandler(accountService)
 
 	v1 := httpClient.App().Group("/api/v1/player")
