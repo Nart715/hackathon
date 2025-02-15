@@ -22,8 +22,8 @@ import (
 )
 
 const (
-	totalRequests = 1_000_000 // 1M RPS target
-	batchSize     = 100_000   // chia 10 batch
+	totalRequests = 1_000_000_000 // 1M RPS target
+	batchSize     = 1000_000_000  // chia 10 batch
 	// numWorkers     = 700       // Adjust based on system capability
 	requestTimeout = 2 * time.Second
 	apiURL         = "http://localhost:8081/api/v1/player/balance-change"
