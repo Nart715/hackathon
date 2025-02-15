@@ -76,11 +76,11 @@ func main() {
 		execute(create1000kAccounts)
 		execute(depositAccount)
 	} else {
-		runtime.GOMAXPROCS(runtime.NumCPU() * 3)
+		runtime.GOMAXPROCS(runtime.NumCPU())
 
 		for i := 0; i < totalRequests; i += batchSize {
 			fmt.Printf("Running batch %d to %d...\n", i, i+batchSize)
-			numWorkers := runtime.NumCPU() * 10
+			numWorkers := runtime.NumCPU() * 20
 			loadTest(batchSize, numWorkers, sendRequest)
 			time.Sleep(2 * time.Second)
 		}
