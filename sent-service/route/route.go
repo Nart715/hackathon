@@ -19,15 +19,19 @@ func InitHttpServer(conf *config.Config, fw *filewriter.FileWriter) {
 
 	httpClient.InitHttpServer()
 
+	accountClient := grpcClient.NewAccountClient(conf.GrpcClient)
+	accountService := service.NewAccountService(accountClient, fw, conf.Worker)
+	accountService.Start()
+	defer accountService.Stop()
+
+	accountHandler := handler.NewAccountHandler(accountService)
+
 	v1 := httpClient.App().Group("/api/v1/player")
-	SetupRoute(v1, conf, fw)
+	SetupRoute(v1, conf, fw, accountHandler)
 	httpClient.Start()
 }
 
-func SetupRoute(r fiber.Router, conf *config.Config, fw *filewriter.FileWriter) {
-	accountClient := grpcClient.NewAccountClient(conf.GrpcClient)
-	accountService := service.NewAccountService(accountClient, fw)
-	accountHandler := handler.NewAccountHandler(accountService)
+func SetupRoute(r fiber.Router, conf *config.Config, fw *filewriter.FileWriter, accountHandler handler.AccountHandler) {
 
 	groupCreatedAccount := r.Group("/created-account")
 	POST(groupCreatedAccount, "", accountHandler.CreateAccount)

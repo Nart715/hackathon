@@ -1,13 +1,14 @@
 package service
 
 import (
+	"component-master/config"
 	"component-master/infra/grpc/client"
 	proto "component-master/proto/account"
 	"component-master/util"
 	"context"
-	"fmt"
 	"log/slog"
 	"sent-service/filewriter"
+	"sent-service/worker"
 	"time"
 )
 
@@ -16,15 +17,30 @@ var ttl = time.Duration(24) * time.Hour
 type AccountService interface {
 	CreateAccount(ctx context.Context, req *proto.CreateAccountRequest) (*proto.CreateAccountResponse, error)
 	BalanceChange(ctx context.Context, req *proto.BalanceChangeRequest) (*proto.BalanceChangeResponse, error)
+	Start()
+	Stop() error
 }
 
 type accountService struct {
 	grpcclient client.AccountClient
 	fw         *filewriter.FileWriter
+	worker     *worker.BalanceWorker
 }
 
-func NewAccountService(client client.AccountClient, fw *filewriter.FileWriter) AccountService {
-	return &accountService{grpcclient: client, fw: fw}
+func NewAccountService(client client.AccountClient, fw *filewriter.FileWriter, conf config.WorkerConfig) AccountService {
+	return &accountService{
+		grpcclient: client,
+		fw:         fw,
+		worker:     worker.NewBalanceWorker(conf, fw, client),
+	}
+}
+
+func (s *accountService) Start() {
+	s.worker.Start(util.ContextwithTimeout())
+}
+
+func (s *accountService) Stop() error {
+	return s.worker.Stop()
 }
 
 func (s *accountService) CreateAccount(ctx context.Context, req *proto.CreateAccountRequest) (*proto.CreateAccountResponse, error) {
@@ -34,12 +50,6 @@ func (s *accountService) CreateAccount(ctx context.Context, req *proto.CreateAcc
 }
 
 func (s *accountService) BalanceChange(ctx context.Context, req *proto.BalanceChangeRequest) (*proto.BalanceChangeResponse, error) {
-	// transactionId, account id, amount, action, status
-	line := util.StringPattern("%d_%d_%d_%d_%s", req.Tx, req.Ac, req.Am, req.Act, "PROCESSING")
-	err := s.fw.WriteLine(line)
-	if err != nil {
-		slog.Error(fmt.Sprintf("write processing file has an error %s", err.Error()))
-	}
-	go s.grpcclient.BalanceChange(util.ContextwithTimeout(), req)
+	s.worker.Submit(ctx, req)
 	return &proto.BalanceChangeResponse{Code: 0, Message: "Success"}, nil
 }

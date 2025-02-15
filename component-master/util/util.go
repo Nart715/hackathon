@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"log/slog"
 	"strconv"
 	"time"
 
@@ -68,7 +67,6 @@ func ContextwithTimeout() context.Context {
 func cancelContext(timeout time.Duration, cancel context.CancelFunc) {
 	time.Sleep(timeout)
 	cancel()
-	slog.Info("context canceled")
 }
 
 func String(i int64) string {

@@ -35,3 +35,9 @@ redis:
     - "localhost:7004"
     - "localhost:7005"
     - "localhost:7006"
+
+worker:
+  numWorkers: 10000
+  queueSize: 100000
+  jobTimeout: 30s
+  shutdownTimeout: 60s

@@ -79,7 +79,7 @@ func mapClientConfig(conf config.GrpcConfigClient) ClientConfig {
 		EnableTLS: false,
 		Timeout:   time.Duration(conf.ReadTimeOut) * time.Second,
 		KeepAliveParams: keepalive.ClientParameters{
-			Time:                time.Duration(conf.WriteTimeOut) * time.Second,
+			Time:                time.Duration(conf.ReadTimeOut) * time.Second,
 			Timeout:             time.Duration(conf.WriteTimeOut) * time.Second,
 			PermitWithoutStream: true,
 		}}

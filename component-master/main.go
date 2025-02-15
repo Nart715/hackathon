@@ -66,7 +66,6 @@ func NewHttpHeader() http.Header {
 }
 
 func init() {
-	util.LoadEnv()
 	flag.StringVar(&load_test, "load_test", "a", "Load test")
 	flag.Parse()
 }

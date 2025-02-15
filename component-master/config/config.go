@@ -17,6 +17,7 @@ type Config struct {
 	GrpcClient GrpcConfigClient `mapstructure:"grpcClient" json:"grpc_client,omitempty"`
 	Kafka      KafkaConfig      `mapstructure:"kafka" json:"kafka,omitempty"`
 	KafkaTopic KafkaTopic       `mapstructure:"kafkaTopics" json:"kafka_topics,omitempty"`
+	Worker     WorkerConfig     `mapstructure:"worker" json:"worker,omitempty"`
 }
 
 type ServerConfig struct {
@@ -83,6 +84,13 @@ type ProducerConfig struct {
 	FlushBytes      int           `mapstructure:"flushBytes" json:"flush_bytes,omitempty"`
 	RetryMax        int           `mapstructure:"retryMax" json:"retry_max,omitempty"`
 	RetryBackoff    time.Duration `mapstructure:"retryBackoff" json:"retry_backoff,omitempty"`
+}
+
+type WorkerConfig struct {
+	NumWorkers      int           `mapstructure:"numWorkers" json:"num_workers,omitempty"`
+	QueueSize       int           `mapstructure:"queueSize" json:"queue_size,omitempty"`
+	JobTimeout      time.Duration `mapstructure:"jobTimeout" json:"job_timeout,omitempty"`
+	ShutdownTimeout time.Duration `mapstructure:"shutdownTimeout" json:"shutdown_timeout,omitempty"`
 }
 
 type KafkaTopic struct {

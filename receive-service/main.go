@@ -60,8 +60,10 @@ func StartBettingGrpcServer(conf *mconfig.Config) {
 	}
 
 	accountService, accountBiz := initServices(conf, kafkaClient)
+
 	bettingGrpcServer := grpcServer.InitAccountGrpcServer(conf.Server.Grpc, accountService)
 
+	defer accountBiz.Shutdown()
 	go SetupKafka(conf, accountBiz, kafkaClient)
 	bettingGrpcServer.Start()
 }
@@ -76,7 +78,7 @@ func initServices(conf *mconfig.Config, kafkaClient *kafka.KafkaClientConfig) (p
 	slog.Info(fmt.Sprintf("redis: %v", redis != nil))
 	transactionGrpcClient := grpcClient.NewTransactionClient(conf.GrpcClient)
 	redisRepository := repository.NewRedisRepository(redis, transactionGrpcClient, conf.Redis.Channel)
-	accountBiz := biz.NewAccountBiz(redisRepository)
+	accountBiz := biz.NewAccountBiz(redisRepository, conf.Worker)
 	accountService := service.NewAccountService(accountBiz, kafkaClient)
 	return accountService, accountBiz
 }

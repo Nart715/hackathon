@@ -61,3 +61,9 @@ grpcClient:
   port: 50052
   readTimeOut: 120s
   writeTimeOut: 120s
+
+worker:
+  numWorkers: 10000
+  queueSize: 100000
+  jobTimeout: 30s
+  shutdownTimeout: 60s
