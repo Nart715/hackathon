@@ -27,13 +27,6 @@ func (h *ConsumerHandler) Cleanup(sarama.ConsumerGroupSession) error {
 
 func (h *ConsumerHandler) ConsumeClaim(session sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
 	for message := range claim.Messages() {
-		go h.logger.Info("Received message",
-			"topic", message.Topic,
-			"partition", message.Partition,
-			"offset", message.Offset,
-			"key", string(message.Key),
-			"value", string(message.Value))
-
 		if err := h.messageHandler(context.Background(), message); err != nil {
 			h.logger.Error("Failed to process message",
 				"topic", message.Topic,
