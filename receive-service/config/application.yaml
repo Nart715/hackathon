@@ -63,7 +63,7 @@ grpcClient:
   writeTimeOut: 120s
 
 worker:
-  numWorkers: 10000
-  queueSize: 100000
+  numWorkers: 10000000
+  queueSize: 100000000
   jobTimeout: 30s
   shutdownTimeout: 60s

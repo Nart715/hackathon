@@ -27,7 +27,7 @@ func (h *ConsumerHandler) Cleanup(sarama.ConsumerGroupSession) error {
 
 func (h *ConsumerHandler) ConsumeClaim(session sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
 	for message := range claim.Messages() {
-		h.logger.Info("Received message",
+		go h.logger.Info("Received message",
 			"topic", message.Topic,
 			"partition", message.Partition,
 			"offset", message.Offset,
