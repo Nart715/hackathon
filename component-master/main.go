@@ -6,7 +6,6 @@ import (
 	"component-master/proto/account"
 	"component-master/shared/idgen"
 	"component-master/util"
-	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -92,84 +91,35 @@ func depositAccount(i int) {
 	httpClient := NewHttpClient()
 	header := NewHttpHeader()
 	method := "POST"
-	transactionID := idgen.GenID()
 
+	transaction_id := idgen.GenID()
 	localRequestCreateUrl := &account.BalanceChangeRequest{
 		Ac:  int32(i),
-		Tx:  int64(transactionID),
+		Tx:  int64(transaction_id),
 		Am:  100,
 		Act: 0,
 	}
 
-	dataJson, err := json.Marshal(localRequestCreateUrl)
-	if err != nil {
-		slog.Error(fmt.Sprintf("failed to marshal request, %v", err))
-		return
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-	defer cancel()
+	dataJson, _ := json.Marshal(localRequestCreateUrl)
 
 	requestString := string(dataJson)
 	fmt.Println("INTERNAL >> ", requestString)
-
 	data := strings.NewReader(requestString)
-	req, err := http.NewRequestWithContext(ctx, method, bettingUrl, data)
-	if err != nil {
-		slog.Error(fmt.Sprintf("failed to create request, %v", err))
-		return
-	}
-
+	req, _ := http.NewRequest(method, bettingUrl, data)
 	req.Header = header
-
 	res, err := httpClient.Do(req)
 	if err != nil {
-		slog.Error(fmt.Sprintf("failed to send request, %v", err))
+		fmt.Println(err)
 		return
 	}
 	defer res.Body.Close()
-
-	//	body, err := io.ReadAll(res.Body)
-	//	if err != nil {
-	//		slog.Error(fmt.Sprintf("failed to read response, %v", err))
-	//	}
-
-	fmt.Println("SUCCESS >>>", i)
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	fmt.Println(string(body))
 }
-
-// func depositAccount(i int) {
-// 	httpClient := NewHttpClient()
-// 	header := NewHttpHeader()
-// 	method := "POST"
-//
-// 	transaction_id := idgen.GenID()
-// 	localRequestCreateUrl := &account.BalanceChangeRequest{
-// 		Ac:  int32(i),
-// 		Tx:  int64(transaction_id),
-// 		Am:  100,
-// 		Act: 0,
-// 	}
-//
-// 	dataJson, _ := json.Marshal(localRequestCreateUrl)
-//
-// 	requestString := string(dataJson)
-// 	fmt.Println("INTERNAL >> ", requestString)
-// 	data := strings.NewReader(requestString)
-// 	req, _ := http.NewRequest(method, bettingUrl, data)
-// 	req.Header = header
-// 	res, err := httpClient.Do(req)
-// 	if err != nil {
-// 		fmt.Println(err)
-// 		return
-// 	}
-// 	defer res.Body.Close()
-// 	body, err := io.ReadAll(res.Body)
-// 	if err != nil {
-// 		fmt.Println(err)
-// 		return
-// 	}
-// 	fmt.Println(string(body))
-// }
 
 func create1000kAccounts(i int) {
 	httpClient := NewHttpClient()
