@@ -45,7 +45,7 @@ func initConnectionTransactionClient(conn *grpc.ClientConn, conf config.GrpcConf
 		client:       tproto.NewTransactionServiceClient(conn),
 		clientConfig: conf,
 	}
-	slog.Info(fmt.Sprintf("InitConnectionClient = %v", accountGrpcClient != nil))
+	slog.Info(fmt.Sprintf("InitConnectionClient = %v", grpcClient != nil))
 }
 
 func (c *transactionClient) UpdateTransaction(ctx context.Context, req *tproto.TransactionUpdate) (*tproto.Empty, error) {
