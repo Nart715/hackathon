@@ -51,6 +51,7 @@ func cancelContext(timeout time.Duration, cancel context.CancelFunc) {
 func InitConnection(conf config.GrpcConfigClient) (*grpc.ClientConn, error) {
 	cfg := mapClientConfig(conf)
 	opts := []grpc.DialOption{
+		grpc.WithTimeout(120 * time.Second),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithUnaryInterceptor(clientInterceptor()),
 	}

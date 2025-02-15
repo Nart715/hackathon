@@ -66,7 +66,7 @@ func (r *GrpcServer) InitGrpcServer() {
 			MinTime:             5 * time.Second, // Khoảng cách tối thiểu giữa hai keepalive
 			PermitWithoutStream: true,
 		}),
-		grpc.ConnectionTimeout(10 * time.Second), // Tăng timeout để tránh disconnect sớm
+		grpc.ConnectionTimeout(120 * time.Second), // Tăng timeout để tránh disconnect sớm
 	}
 	r.server = grpc.NewServer(opts...)
 }

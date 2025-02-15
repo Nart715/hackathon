@@ -14,7 +14,7 @@ redis:
   readOnly: true
   routeRandomly: true
   maxRedirects: 6
-  poolSize: 700
+  poolSize: 500
   minIdleConns: 6
   channel: account-balance-change
   clusters:
