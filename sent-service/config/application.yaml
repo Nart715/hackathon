@@ -3,7 +3,7 @@ server:
     host: localhost
     port: 50052
     enableTLS: false
-    correctTimeOut: 30000
+    correctTimeOut: 60000
   http:
     host: localhost
     port: 8081
@@ -13,18 +13,18 @@ server:
 grpcClient:
   host: 10.89.15.96
   port: 50051
-  readTimeOut: 120s
-  writeTimeOut: 120s
+  readTimeOut: 300s
+  writeTimeOut: 300s
 
 redis:
   db: 0
   maxIdle: 1024
-  dialTimeout: 10s
-  readTimeout: 10s
-  writeTimeout: 10s
+  dialTimeout: 30s
+  readTimeout: 30s
+  writeTimeout: 30s
   readOnly: true
   routeRandomly: true
-  maxRedirects: 6
+  maxRedirects: 10
   poolSize: 700
   minIdleConns: 6
   channel: account-balance-change
