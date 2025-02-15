@@ -432,8 +432,15 @@ func (r *redisRepository) BalanceChange(ctx context.Context, input *proto.Balanc
 
 	inputJsonData := string(jsonData)
 
-	go r.recordTransaction(ctx, transactionId, inputJsonData)
-	go r.addTransactionByAccountId(ctx, accountId, transactionId, inputJsonData)
+	_, err = r.recordTransaction(ctx, transactionId, inputJsonData)
+	if err != nil {
+		slog.Error("record transaction error ", "error", err)
+	}
+
+	_, err = r.addTransactionByAccountId(ctx, accountId, transactionId, inputJsonData)
+	if err != nil {
+		slog.Error("add transaction error ", "error", err)
+	}
 
 	accountKey := mapKeyInt64toString(AccountSetKeyPrefix, accountId)
 	r.pipelineMu.Lock()
