@@ -13,20 +13,27 @@ import (
 	"log/slog"
 	"math/rand"
 	"net/http"
+	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/valyala/fasthttp"
 )
 
 const (
-	totalRequests  = 1000000 // 500K RPS target
-	numWorkers     = 800     // Adjust based on system capability
+	totalRequests = 1_000_000 // 1M RPS target
+	batchSize     = 100_000   // chia 10 batch
+	// numWorkers     = 700       // Adjust based on system capability
 	requestTimeout = 2 * time.Second
 	apiURL         = "http://localhost:8081/api/v1/player/balance-change"
 )
 
-var httpClient = &fasthttp.Client{MaxConnsPerHost: 10000}
+var httpClient = &fasthttp.Client{
+	MaxConnsPerHost: 10000, // Tăng số lượng kết nối tối đa
+	ReadTimeout:     2 * time.Second,
+	WriteTimeout:    2 * time.Second,
+}
 
 var (
 	redisClient *redis.RedisClient
@@ -39,6 +46,12 @@ var (
 
 	load_test = "a"
 )
+
+var requestPool = sync.Pool{
+	New: func() interface{} {
+		return &account.BalanceChangeRequest{}
+	},
+}
 
 func NewHttpClient() http.Client {
 	return http.Client{
@@ -63,8 +76,14 @@ func main() {
 		execute(create1000kAccounts)
 		execute(depositAccount)
 	} else {
-		fmt.Println("INTERNAL >> ", "bbbb")
-		loadTest(totalRequests, numWorkers, sendRequest)
+		runtime.GOMAXPROCS(36)
+
+		for i := 0; i < totalRequests; i += batchSize {
+			fmt.Printf("Running batch %d to %d...\n", i, i+batchSize)
+			numWorkers := runtime.NumCPU() * 2
+			loadTest(batchSize, numWorkers, sendRequest)
+			time.Sleep(2 * time.Second)
+		}
 		// loadTest(500000, depositAccountRandom)
 	}
 }
@@ -187,38 +206,33 @@ func initInfra() {
 }
 
 func sendRequest() {
-	rng := rand.New(rand.NewSource(time.Now().UnixNano())) // Unique RNG per request
+	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 	transactionID := idgen.GenID()
 
-	// Generate a randomized request body
-	localRequest := &account.BalanceChangeRequest{
-		Ac:  int32(rng.Intn(100_000) + 1), // Random Account ID
-		Tx:  int64(transactionID),         // Unique transaction ID
-		Am:  1,                            // Amount (fixed at 1 for now)
-		Act: []int32{1, -1}[rng.Intn(2)],  // ⬅️ Randomly choose between 1 or -1
-	}
+	// Lấy object từ pool
+	localRequest := requestPool.Get().(*account.BalanceChangeRequest)
+	localRequest.Ac = int32(rng.Intn(100_000) + 1)
+	localRequest.Tx = int64(transactionID)
+	localRequest.Am = 1
+	localRequest.Act = []int32{1, -1}[rng.Intn(2)]
 
-	// Convert to JSON
 	dataJson, _ := json.Marshal(localRequest)
 
-	requestString := string(dataJson)
-
-	fmt.Println("INTERNAL >> ", requestString)
-
-	// Prepare HTTP request
 	req := fasthttp.AcquireRequest()
 	resp := fasthttp.AcquireResponse()
 	defer fasthttp.ReleaseRequest(req)
 	defer fasthttp.ReleaseResponse(resp)
 
 	req.SetRequestURI(apiURL)
-	req.Header.SetMethod("POST")
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.SetMethod(fasthttp.MethodPost)
+	req.Header.SetContentType("application/json")
 	req.SetBody(dataJson)
 
-	// Send the request
 	err := httpClient.DoTimeout(req, resp, requestTimeout)
 	if err != nil {
 		fmt.Println("Request failed:", err)
 	}
+
+	// Đưa object trở lại pool
+	requestPool.Put(localRequest)
 }
