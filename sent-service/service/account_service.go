@@ -50,6 +50,6 @@ func (s *accountService) CreateAccount(ctx context.Context, req *proto.CreateAcc
 }
 
 func (s *accountService) BalanceChange(ctx context.Context, req *proto.BalanceChangeRequest) (*proto.BalanceChangeResponse, error) {
-	s.worker.Submit(ctx, req)
+	s.worker.Submit(util.ContextwithTimeout(), req)
 	return &proto.BalanceChangeResponse{Code: 0, Message: "Success"}, nil
 }
