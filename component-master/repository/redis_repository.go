@@ -358,7 +358,7 @@ func (r *redisRepository) recordTransaction(ctx context.Context, transactionId i
 
 	tx := r.pipeline.TxPipeline()
 
-	result := tx.Eval(ctx, scriptValidateAndAddTranaction,
+	result := tx.Eval(ctx, scriptAddTransactionAccount,
 		[]string{"tx:transactionValidate"},
 		transactionId,
 		inputJsonData,
@@ -366,7 +366,7 @@ func (r *redisRepository) recordTransaction(ctx context.Context, transactionId i
 
 	_, err := tx.Exec(ctx)
 	if err != nil {
-		return false, fmt.Errorf("failed to execute transaction: %w", err)
+		return false, fmt.Errorf("failed to execute transaction record: %w", err)
 	}
 
 	success, err := result.Int64()
@@ -395,7 +395,7 @@ func (r *redisRepository) addTransactionByAccountId(ctx context.Context, account
 
 	_, err := tx.Exec(ctx)
 	if err != nil {
-		return false, fmt.Errorf("failed to execute transaction: %w", err)
+		return false, fmt.Errorf("failed to execute transaction add account: %w", err)
 	}
 
 	success, err := result.Int64()
@@ -432,12 +432,12 @@ func (r *redisRepository) BalanceChange(ctx context.Context, input *proto.Balanc
 
 	inputJsonData := string(jsonData)
 
-	_, err = r.recordTransaction(ctx, transactionId, inputJsonData)
+	_, err = r.recordTransaction(context.Background(), transactionId, inputJsonData)
 	if err != nil {
 		slog.Error("record transaction error ", "error", err)
 	}
 
-	_, err = r.addTransactionByAccountId(ctx, accountId, transactionId, inputJsonData)
+	_, err = r.addTransactionByAccountId(context.Background(), accountId, transactionId, inputJsonData)
 	if err != nil {
 		slog.Error("add transaction error ", "error", err)
 	}
