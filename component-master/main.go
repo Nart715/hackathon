@@ -36,11 +36,14 @@ var httpClient = &fasthttp.Client{
 }
 
 var (
+	MAP_PORT = map[int]int{
+		1: 8081,
+		0: 8081,
+	}
 	redisClient *redis.RedisClient
 
-	createAccountUrl = "http://localhost:8081/api/v1/player/created-account"
-	depositUrl       = "http://localhost:8081/api/v1/player/balance-change"
-	bettingUrl       = "http://localhost:8081/api/v1/player/balance-change"
+	createAccountUrl = "http://localhost:%d/api/v1/player/created-account"
+	bettingUrl       = "http://localhost:%d/api/v1/player/balance-change"
 	requestCreateUrl = &account.CreateAccountRequest{}
 	depositRequest   = &account.BalanceChangeRequest{}
 
@@ -105,7 +108,9 @@ func depositAccount(i int) {
 	requestString := string(dataJson)
 	fmt.Println("INTERNAL >> ", requestString)
 	data := strings.NewReader(requestString)
-	req, _ := http.NewRequest(method, bettingUrl, data)
+	num := MAP_PORT[i%2]
+	url := fmt.Sprintf(bettingUrl, num)
+	req, _ := http.NewRequest(method, url, data)
 	req.Header = header
 	res, err := httpClient.Do(req)
 	if err != nil {
@@ -135,7 +140,9 @@ func create1000kAccounts(i int) {
 	requestString := string(dataJson)
 	fmt.Println("INTERNAL >> ", requestString)
 	data := strings.NewReader(requestString)
-	req, _ := http.NewRequest(method, createAccountUrl, data)
+	num := MAP_PORT[i%2]
+	url := fmt.Sprintf(createAccountUrl, num)
+	req, _ := http.NewRequest(method, url, data)
 	req.Header = header
 	res, err := httpClient.Do(req)
 	if err != nil {
